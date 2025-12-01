@@ -1,20 +1,22 @@
 # config.yaml
 model:
-  path: "D:/Qwen/Qwen/Qwen3-0___6B"
+  path: "D:/Qwen/Qwen/Qwen3-4B"
   # path: "D:/Qwen/Qwen/Qwen3-4B"
   # path: "D:/Qwen/Qwen/Qwen3-8B"
-  max_tokens: 4096
+  max_tokens: 1024
   temperature: 0.3
   top_p: 0.9
   top_k: 50
   repetition_penalty: 1.1
 
 vector_db:
-  chunk_size: 2000  # 增大块大小，减少总块数
-  chunk_overlap: 300
+  chunk_size: 350  # 增大块大小，减少总块数
+  chunk_overlap: 100
+  smart_chunking: true  # 启用智能分割
+  semantic_threshold: 0.8  # 语义分割阈值
   persist_dir: "vector_db_afsim_enhanced"
-  search_k: 6
-  batch_size: 3000  # 批次大小
+  search_k: 5
+  batch_size: 2000  # 批次大小
 
 project:
   root: "D:/Qwen/Qwen3/afsim_ai_coder/demos"
