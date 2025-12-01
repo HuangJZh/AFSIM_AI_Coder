@@ -1,0 +1,37 @@
+# F-22战斗机平台定义
+include_once weapons/aam/short_range_ir_missile.txt
+include_once weapons/aim-9/sharpshooter_missile.txt
+include_once sensors/radar/f-22_radar.txt
+include_once sensors/electronic_warfare/f-22_electronic_warfare.txt
+include_once processors/ai/advanced_ai_processor.txt
+
+platform_type F_22_WSF_PLATFORM WSF_PLATFORM
+
+   icon F-22
+   category fighter
+
+   mover WSF_AIR_MOVER
+
+   length 18.0
+   width 18.0
+   height 5.0
+   weight 23.0
+   max_speed 1.2
+   max_climb_rate 0.1
+   turn_rate 0.05
+   aspect_ratio 1.0
+   wing_loading 100.0
+   takeoff_distance 1000.0
+   landing_distance 1000.0
+   initial_position x=0 y=0 z=100
+   initial_velocity vx=0 vy=0 vz=0
+   initial_heading 0.0
+   initial_altitude 100.0
+   initial_angle_of_attack 0.0
+   initial_side_slip_angle 0.0
+   initial_roll_angle 0.0
+   initial_pitch_angle 0.0
+   initial_yaw_angle 0.0
+   initial_state "active"
+   initial_mode "combat"
+   initial_signature_set "f-22_signature_set"

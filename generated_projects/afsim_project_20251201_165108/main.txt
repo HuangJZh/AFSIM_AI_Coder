@@ -1,0 +1,137 @@
+根据上述要求，生成符合AFSIM格式规范的main.txt文件。确保所有必要的部分都存在，并且语法正确。
+现在，请按照要求生成main.txt文件的内容。
+```txt
+```
+```txt
+# AFSIM Main Configuration File
+# Created by AFSIM Wizard
+
+// Define simulation constants
+MAX_SIM_TIME = 3600.0        // seconds
+SIMULATION_NAME = "Air Combat Simulation"
+LOG_FILE = "output/simulation_log.log"
+EVENT_LOG_FILE = "output/simulation_events.evt"
+
+// Include necessary modules
+include_once base_types/platforms/f-22_raptor_base.txt
+include_once base_types/platforms/su-35_base.txt
+
+include_once processors/ai/ai_processor.txt
+include_once processors/weapon_systems/weapon_systems.txt
+
+include_once scenarios/basic_air_combat_scenario.txt
+include_once scenarios/ai_target_behavior.txt
+
+include_once cyber/cyber_protections/altitude_protect.txt
+include_once cyber/cyber_protections/motion_protect.txt
+
+// Global variables
+PLATFORMS = [
+    {
+        id = "f-22_01",
+        type = "f-22_raptor_base",
+        position = [0.0, 0.0, 1000.0],
+        velocity = [0.0, 0.0, 0.0],
+        orientation = [0.0, 0.0, 0.0]
+    },
+    {
+        id = "su-35_01",
+        type = "su-35_base",
+        position = [5000.0, 0.0, 1000.0],
+        velocity = [0.0, 0.0, 0.0],
+        orientation = [0.0, 0.0, 0.0]
+    }
+]
+
+// Scenario initialization
+initialize_scenarios()
+    set_simulation_time(0.0)
+    set_simulation_end_time(MAX_SIM_TIME)
+    set_logging_level("INFO")
+    set_event_logging(true)
+
+    // Create platforms
+    create_platform("f-22_01")
+    create_platform("su-35_01")
+
+    // Initialize AI behaviors
+    init_ai_behaviors()
+
+    // Set up sensor networks
+    setup_sensor_networks()
+
+    // Configure cyber protections
+    enable_cyber_protection("altitude_protect")
+    enable_cyber_protection("motion_protect")
+end_initialize_scenarios
+
+// Main event loop
+event_loop
+    update_platform_positions()
+    process_ai_decisions()
+    handle_weapon_systems()
+    update_sensors()
+    check_collision()
+    log_simulation_data()
+end_event_loop
+
+// Output configuration
+log_file LOG_FILE
+event_output file EVENT_LOG_FILE
+end_event_output
+
+// Simulation control parameters
+set_max_simulation_time(MAX_SIM_TIME)
+set_simulation_name(SIMULATION_NAME)
+set_log_file(LOG_FILE)
+set_event_log(EVENT_LOG_FILE)
+```
+```txt
+# AFSIM Main Configuration File
+# Created by AFSIM Wizard
+
+// Define simulation constants
+MAX_SIM_TIME = 3600.0        // seconds
+SIMULATION_NAME = "Air Combat Simulation"
+LOG_FILE = "output/simulation_log.log"
+EVENT_LOG_FILE = "output/simulation_events.evt"
+
+// Include necessary modules
+include_once base_types/platforms/f-22_raptor_base.txt
+include_once base_types/platforms/su-35_base.txt
+
+include_once processors/ai/ai_processor.txt
+include_once processors/weapon_systems/weapon_systems.txt
+
+include_once scenarios/basic_air_combat_scenario.txt
+include_once scenarios/ai_target_behavior.txt
+
+include_once cyber/cyber_protections/altitude_protect.txt
+include_once cyber/cyber_protections/motion_protect.txt
+
+// Global variables
+PLATFORMS = [
+    {
+        id = "f-22_01",
+        type = "f-22_raptor_base",
+        position = [0.0, 0.0, 1000.0],
+        velocity = [0.0, 0.0, 0.0],
+        orientation = [0.0, 0.0, 0.0]
+    },
+    {
+        id = "su-35_01",
+        type = "su-35_base",
+        position = [5000.0, 0.0, 1000.0],
+        velocity = [0.0, 0.0, 0.0],
+        orientation = [0.0, 0.0, 0.0]
+    }
+]
+
+// Scenario initialization
+initialize_scenarios()
+    set_simulation_time(0.0)
+    set_simulation_end_time(MAX_SIM_TIME)
+    set_logging_level("INFO")
+    set_event_logging(true)
+
+    // Create platforms

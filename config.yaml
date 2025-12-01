@@ -32,3 +32,58 @@ logging:
 embedding:
   # model: "BAAI/bge-m3"
   model: "BAAI/bge-small-zh-v1.5"
+
+#分阶段生成
+generation:
+  strategy: "multi_stage"
+  stages:
+    - name: "project_structure"
+      description: "分析需求并规划项目结构"
+      max_tokens: 300
+      temperature: 0.1
+    
+    - name: "main_program"
+      description: "生成主程序文件"
+      max_tokens: 800
+      temperature: 0.2
+      
+    - name: "platforms"
+      description: "生成平台定义文件"
+      max_tokens: 1200
+      temperature: 0.15
+      
+    - name: "scenarios"
+      description: "生成场景文件"
+      max_tokens: 1000
+      temperature: 0.15
+      
+    - name: "processors"
+      description: "生成处理器文件"
+      max_tokens: 900
+      temperature: 0.15
+      
+    - name: "sensors"
+      description: "生成传感器文件"
+      max_tokens: 700
+      temperature: 0.15
+      
+    - name: "weapons"
+      description: "生成武器文件"
+      max_tokens: 700
+      temperature: 0.15
+      
+    - name: "integration"
+      description: "整合和验证所有文件"
+      max_tokens: 600
+      temperature: 0.1
+  
+  output:
+    base_dir: "generated_projects"
+    create_folders: true
+    generate_readme: true
+    include_examples: false
+  
+  validation:
+    check_dependencies: true
+    verify_imports: true
+    test_scenarios: false
