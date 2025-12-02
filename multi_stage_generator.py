@@ -34,9 +34,9 @@ class AFSimProjectStructure:
         query_lower = query.lower()
         
         # 检测项目类型
-        # project_type = "standard"
-        # if any(word in query_lower for word in ["简单", "simple", "基础", "basic"]):
-        #     project_type = "simple"
+        project_type = "standard"
+        if any(word in query_lower for word in ["简单", "simple", "基础", "basic"]):
+            project_type = "simple"
         
         # 检测需要的组件
         components = self._detect_components(query_lower)

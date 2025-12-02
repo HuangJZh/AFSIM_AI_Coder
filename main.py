@@ -119,36 +119,11 @@ def display_generated_project(result, total_time):
             print(f"错误: {result['error']}")
         return False
 
-def view_file_content(project_dir, files):
-    """查看特定文件的内容"""
-    print("\n可查看的文件:")
-    for i, file_path in enumerate(files[:10], 1):
-        print(f"  {i:2d}. {file_path}")
-    
-    try:
-        choice = input("\n请输入文件编号（0跳过）: ").strip()
-        if choice.isdigit() and 1 <= int(choice) <= len(files):
-            file_idx = int(choice) - 1
-            file_path = files[file_idx]
-            full_path = os.path.join(project_dir, file_path)
-            
-            if os.path.exists(full_path):
-                print(f"\n{'='*60}")
-                print(f"文件内容: {file_path}")
-                print('='*60)
-                with open(full_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    print(content[:1000])  # 只显示前1000字符
-                    if len(content) > 1000:
-                        print(f"\n... (文件过长，只显示前1000字符)")
-                print('='*60)
-    except:
-        pass
 
 def main():
     """主函数"""
     print("=" * 80)
-    print("AFSIM 智能代码生成系统 (多阶段生成版)")
+    print("AFSIM 智能代码生成系统")
     print("=" * 80)
     
     # 设置日志
@@ -230,12 +205,6 @@ def main():
             
             # 显示结果
             success = display_generated_project(result, total_time)
-            
-            # 如果生成成功，询问是否查看文件内容
-            if success:
-                view_files = input("\n是否查看某个文件的具体内容？(y/n): ").strip().lower()
-                if view_files == 'y' or view_files == 'yes':
-                    view_file_content(result['project_dir'], result.get('generated_files', []))
             
             print("\n" + "=" * 80)
             
