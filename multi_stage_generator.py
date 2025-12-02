@@ -29,7 +29,7 @@ class AFSimProjectStructure:
             },
             "standard": {
                 "files": ["main.txt", "README.md", "input_variables.txt"],
-                "folders": ["patterns","platforms", "scenarios", "processors", "weapons", "sensors","signatures"]
+                "folders": ["patterns","platforms", "scenarios", "processors", "weapons", "sensors", "signatures"]
             }
         }
     
@@ -39,11 +39,7 @@ class AFSimProjectStructure:
         
         # 检测项目类型
         project_type = "standard"
-        if any(word in query_lower for word in ["卫星", "satellite", "轨道", "orbit"]):
-            project_type = "satellite"
-        elif any(word in query_lower for word in ["通信", "communication", "comm", "网络"]):
-            project_type = "complex"
-        elif any(word in query_lower for word in ["简单", "simple", "基础", "basic"]):
+        if any(word in query_lower for word in ["简单", "simple", "基础", "basic"]):
             project_type = "simple"
         
         # 检测需要的组件
@@ -62,14 +58,24 @@ class AFSimProjectStructure:
     def _detect_components(self, query: str) -> Dict[str, bool]:
         """检测需要的组件"""
         return {
-            "platforms": any(word in query for word in ["平台", "platform", "飞机", "aircraft", "飞行器"]),
-            "weapons": any(word in query for word in ["武器", "weapon", "导弹", "missile", "火炮"]),
-            "sensors": any(word in query for word in ["传感器", "sensor", "雷达", "radar", "探测"]),
-            "processors": any(word in query for word in ["处理器", "processor", "控制", "control", "算法"]),
-            "scenarios": any(word in query for word in ["场景", "scenario", "任务", "mission", "想定"]),
-            "communications": any(word in query for word in ["通信", "communication", "comm", "网络", "network"]),
-            "navigation": any(word in query for word in ["导航", "navigation", "gps", "定位"]),
-            "patterns": any(word in query for word in ["模式", "pattern", "阵型", "formation"]),
+            "platforms": any(word in query for word in [
+                "平台", "导弹", "炸弹", "车", "卫星", "船", "坦克", "飞行器", "飞机", "发射车"
+            ]),
+            "scenarios": any(word in query for word in [
+                "红", "蓝", "队", "对抗"
+            ]),
+            "processors": any(word in query for word in [
+                "处理器", "控制", "制导", "跟踪"
+            ]),
+            "weapons": any(word in query for word in [
+                "武器平台", "武器", "导弹", "拦截弹","火箭", "炸弹", "火炮"
+            ]),
+            "sensors": any(word in query for word in [
+                "传感器", "雷达", "探测", "跟踪", "红外", "光学"
+            ]),
+            "signatures": any(word in query for word in [
+                "特征", "雷达反射", "红外特征", "光学特征", "雷达截面积", "隐身"
+            ]),
         }
     
     def _build_project_structure(self, project_type: str, components: Dict) -> Dict:
@@ -81,19 +87,6 @@ class AFSimProjectStructure:
             "files": base_structure["files"].copy(),
             "folders": base_structure["folders"].copy()
         }
-        
-        # 添加必要的文件夹
-        if components["communications"]:
-            if "avionics" not in adjusted_structure["folders"]:
-                adjusted_structure["folders"].append("avionics")
-            if "ground_networks" not in adjusted_structure["folders"]:
-                adjusted_structure["folders"].append("ground_networks")
-        
-        if components["navigation"]:
-            if "TLE" not in adjusted_structure["folders"]:
-                adjusted_structure["folders"].append("TLE")
-            if "satellites" not in adjusted_structure["folders"]:
-                adjusted_structure["folders"].append("satellites")
         
         return adjusted_structure
     
@@ -118,7 +111,7 @@ class AFSimProjectStructure:
         if components["platforms"]:
             stages.append({
                 "name": "platforms",
-                "description": "生成平台定义文件",
+                "description": "Generate platform definition file",
                 "depends_on": ["project_structure"],
                 "output_patterns": ["platforms/*.txt"]
             })
@@ -126,7 +119,7 @@ class AFSimProjectStructure:
         if components["scenarios"]:
             stages.append({
                 "name": "scenarios",
-                "description": "生成场景文件",
+                "description": "Generate faction file",
                 "depends_on": ["platforms", "main_program"],
                 "output_patterns": ["scenarios/*.txt"]
             })
@@ -378,7 +371,7 @@ class MultiStageGenerator:
 原始需求：{query}
 
 请输出一个JSON格式的项目结构规划，包含以下信息：
-1. 项目类型（simple/standard/complex/satellite）
+1. 项目类型（simple/standard/complex）
 2. 需要的组件列表
 3. 建议的文件结构
 4. 主要平台名称

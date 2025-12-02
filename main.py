@@ -71,8 +71,8 @@ def collect_project_requirements():
                 requirements.append(line)
                 line_count += 1
         except KeyboardInterrupt:
-            print("\n\n输入中断")
-            return None
+            print("\n\n⚠️  输入中断，返回主菜单")
+            return "CANCEL"  # 返回特殊标记表示用户取消
         except EOFError:
             print("\n\n输入结束")
             if line_count > 0:
@@ -177,7 +177,7 @@ def main():
         return
     
     try:
-        # 初始化多阶段生成系统 - 现在只需要导入一个类
+        # 初始化多阶段生成系统
         print("\n正在初始化多阶段生成系统...")
         chat_system = MultiStageChatSystem(
             project_root=project_root,
@@ -193,10 +193,22 @@ def main():
         print(f"   基础库: {', '.join(project_info['base_libraries'])}")
         print(f"   知识库: {chat_system.get_vector_db_info()}")
         
-        # 主循环 (保持不变)
+        # 主循环
         while True:
             # 收集项目需求
             query = collect_project_requirements()
+            
+            # 处理用户取消
+            if query == "CANCEL":
+                # 询问是否退出程序
+                exit_choice = input("\n是否退出程序？(y/n): ").strip().lower()
+                if exit_choice == 'y' or exit_choice == 'yes':
+                    print("\n感谢使用 AFSIM 智能代码生成系统！再见！")
+                    break
+                else:
+                    continue  # 继续下一轮循环
+            
+            # 正常处理空输入
             if query is None:
                 continue
             
