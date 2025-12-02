@@ -13,7 +13,7 @@ class GenerationStage:
     """生成阶段定义"""
     name: str
     description: str
-    max_tokens: int = 500
+    max_tokens: int = 2048
     temperature: float = 0.2
     depends_on: List[str] = field(default_factory=list)
     output_patterns: List[str] = field(default_factory=list)
@@ -22,25 +22,21 @@ class AFSimProjectStructure:
     """AFSIM项目结构分析器"""
     
     def __init__(self):
-        self.structure_templates = {
-            "simple": {
-                "files": ["project_name.txt"],
-                "folders": ["platforms", "scenarios"]
-            },
-            "standard": {
-                "files": ["main.txt", "README.md", "input_variables.txt"],
-                "folders": ["patterns","platforms", "scenarios", "processors", "weapons", "sensors", "signatures"]
-            }
-        }
+        #基础文件
+        self.base_files = [
+            "main.txt",
+            "README.md",
+            "project_structure.json"
+        ]
     
     def analyze_requirements(self, query: str) -> Dict:
         """分析需求，确定项目结构"""
         query_lower = query.lower()
         
         # 检测项目类型
-        project_type = "standard"
-        if any(word in query_lower for word in ["简单", "simple", "基础", "basic"]):
-            project_type = "simple"
+        # project_type = "standard"
+        # if any(word in query_lower for word in ["简单", "simple", "基础", "basic"]):
+        #     project_type = "simple"
         
         # 检测需要的组件
         components = self._detect_components(query_lower)
@@ -80,15 +76,50 @@ class AFSimProjectStructure:
     
     def _build_project_structure(self, project_type: str, components: Dict) -> Dict:
         """构建项目结构"""
-        base_structure = self.structure_templates.get(project_type, self.structure_templates["standard"])
-        
-        # 根据组件调整结构
-        adjusted_structure = {
-            "files": base_structure["files"].copy(),
-            "folders": base_structure["folders"].copy()
+        structure = {
+            "files": self.base_files.copy(),
+            "folders": []
         }
         
-        return adjusted_structure
+        # 根据检测到的组件添加相应的文件夹
+        folder_mapping = {
+            "platforms": "platforms",
+            "scenarios": "scenarios",
+            "processors": "processors",
+            "weapons": "weapons",
+            "sensors": "sensors",
+            "signatures": "signatures",
+        }
+
+        # 添加检测到的组件的文件夹
+        for component, has_component in components.items():
+            if has_component and component in folder_mapping:
+                folder_name = folder_mapping[component]
+                if folder_name not in structure["folders"]:
+                    structure["folders"].append(folder_name)
+        
+        # 根据项目类型添加特殊文件
+        if project_type == "simple":
+            # 简单项目只保留基础文件
+            structure["files"] = ["main.txt", "README.md"]
+        elif project_type == "standard":
+            # 标准项目添加输入变量文件
+            structure["files"].append("input_variables.txt")
+        
+        # 确保至少有平台和场景文件夹（大部分项目都需要）
+        if "platforms" not in structure["folders"] and components["platforms"]:
+            structure["folders"].append("platforms")
+        if "scenarios" not in structure["folders"] and components["scenarios"]:
+            structure["folders"].append("scenarios")
+        
+        # 排序文件夹，让常用文件夹在前面
+        preferred_order = ["platforms", "scenarios", "weapons", "sensors", "processors"]
+        structure["folders"] = sorted(
+            structure["folders"],
+            key=lambda x: (preferred_order.index(x) if x in preferred_order else len(preferred_order), x)
+        )
+        
+        return structure
     
     def _generate_stages(self, project_type: str, components: Dict) -> List[Dict]:
         """生成阶段计划"""
@@ -98,86 +129,90 @@ class AFSimProjectStructure:
                 "description": "分析需求并规划项目结构",
                 "depends_on": [],
                 "output_patterns": ["project_structure.json"]
-            },
-            {
+            }
+        ]
+
+        # 动态添加主程序阶段（大部分项目都需要）
+        if project_type != "simple":
+            stages.append({
                 "name": "main_program",
                 "description": "生成主程序文件",
                 "depends_on": ["project_structure"],
                 "output_patterns": ["main.txt"]
-            }
-        ]
+            })    
         
-        # 根据组件添加阶段
-        if components["platforms"]:
-            stages.append({
+        # 根据检测到的组件添加相应阶段
+        component_stages = {
+            "platforms": {
                 "name": "platforms",
-                "description": "Generate platform definition file",
+                "description": "生成平台定义文件",
                 "depends_on": ["project_structure"],
                 "output_patterns": ["platforms/*.txt"]
-            })
-        
-        if components["scenarios"]:
-            stages.append({
+            },
+            "scenarios": {
                 "name": "scenarios",
-                "description": "Generate faction file",
-                "depends_on": ["platforms", "main_program"],
+                "description": "生成场景文件",
+                "depends_on": ["platforms", "main_program"] if "main_program" in [s["name"] for s in stages] else ["platforms"],
                 "output_patterns": ["scenarios/*.txt"]
-            })
-        
-        if components["processors"]:
-            stages.append({
+            },
+            "processors": {
                 "name": "processors",
                 "description": "生成处理器文件",
                 "depends_on": ["platforms"],
                 "output_patterns": ["processors/*.txt"]
-            })
-        
-        if components["sensors"]:
-            stages.append({
+            },
+            "sensors": {
                 "name": "sensors",
                 "description": "生成传感器文件",
                 "depends_on": ["platforms"],
                 "output_patterns": ["sensors/*.txt"]
-            })
-        
-        if components["weapons"]:
-            stages.append({
+            },
+            "weapons": {
                 "name": "weapons",
                 "description": "生成武器文件",
                 "depends_on": ["platforms"],
                 "output_patterns": ["weapons/*.txt"]
+            },
+            "signatures": {
+                "name": "signatures",
+                "description": "生成特征信号文件",
+                "depends_on": ["project_structure"],
+                "output_patterns": ["signatures/*.txt"]
+            }
+        }
+
+        # 添加检测到的组件的阶段
+        for component, has_component in components.items():
+            if has_component and component in component_stages:
+                stage_config = component_stages[component]
+                # 检查依赖是否满足
+                all_stage_names = [s["name"] for s in stages]
+                missing_deps = [dep for dep in stage_config["depends_on"] if dep not in all_stage_names]
+                
+                # 如果缺少依赖，尝试用基础阶段替代
+                if missing_deps:
+                    # 检查是否可以替换依赖
+                    if "platforms" in missing_deps and "platforms" not in all_stage_names:
+                        # 如果需要平台但平台阶段不存在，先添加平台阶段
+                        if components["platforms"]:
+                            stages.append(component_stages["platforms"])
+                        else:
+                            # 如果没有检测到平台，简化依赖
+                            stage_config["depends_on"] = [dep for dep in stage_config["depends_on"] if dep != "platforms"]
+                
+                # 添加阶段
+                if not any(s["name"] == stage_config["name"] for s in stages):
+                    stages.append(stage_config)
+        
+        # 添加集成阶段（如果有其他阶段的话）
+        if len(stages) > 1:  # 除了project_structure还有其他阶段
+            integration_deps = [stage["name"] for stage in stages[1:] if stage["name"] != "integration"]
+            stages.append({
+                "name": "integration",
+                "description": "整合和验证所有文件",
+                "depends_on": integration_deps,
+                "output_patterns": ["README.md", "run_instructions.txt"]
             })
-        
-        # 卫星项目特殊阶段
-        if project_type == "satellite":
-            stages.extend([
-                {
-                    "name": "satellites",
-                    "description": "生成卫星轨道文件",
-                    "depends_on": ["platforms"],
-                    "output_patterns": ["satellites/**/*.txt", "TLE/*.txt"]
-                },
-                {
-                    "name": "ground_networks",
-                    "description": "生成地面站网络文件",
-                    "depends_on": ["platforms"],
-                    "output_patterns": ["ground_networks/*.txt"]
-                },
-                {
-                    "name": "avionics",
-                    "description": "生成航电系统文件",
-                    "depends_on": ["platforms"],
-                    "output_patterns": ["avionics/**/*.txt"]
-                }
-            ])
-        
-        # 集成阶段
-        stages.append({
-            "name": "integration",
-            "description": "整合和验证所有文件",
-            "depends_on": [stage["name"] for stage in stages[1:] if stage["name"] != "integration"],
-            "output_patterns": ["README.md", "run_instructions.txt"]
-        })
         
         return stages
 
@@ -364,193 +399,196 @@ class MultiStageGenerator:
         stage_name = stage_info["name"]
         stage_desc = stage_info["description"]
         
-        # 阶段特定的指令
+        # 只保留需要的阶段指令
         stage_instructions = {
             "project_structure": f"""请分析AFSIM项目需求并规划项目结构。
 
-原始需求：{query}
+    原始需求：{query}
 
-请输出一个JSON格式的项目结构规划，包含以下信息：
-1. 项目类型（simple/standard/complex）
-2. 需要的组件列表
-3. 建议的文件结构
-4. 主要平台名称
-5. 主要场景描述
+    请输出一个JSON格式的项目结构规划，包含以下信息：
+    1. 需要的组件列表
+    2. 建议的文件结构
+    3. 主要平台名称
+    4. 主要场景描述
 
-**请只输出AFSIM代码格式，不要其他内容**。""",
+    **请只输出AFSIM代码格式，不要其他内容**。""",
+            
+            "signatures": f"""请生成AFSIM特征信号文件。
+
+    基于项目需求：{query}
+    项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+    已生成的文件：{chr(10).join(f"- {f}" for f in self.generated_files)}
+
+    需要生成以下特征信号定义：
+    1. 雷达特征（radar_signature）
+    2. 红外特征（infrared_signature）  
+    3. 光学特征（optical_signature）
+
+    每个特征信号文件应该包含：
+    1. 特征类型定义
+    2. RCS值或辐射强度
+    3. 角度依赖性
+    4. 双基地特征（如适用）
+
+    请为每种特征信号生成单独的.txt文件。
+    使用以下格式分隔不同文件：
+    === Feature_Name_signature.txt ===
+    [特征信号文件内容]
+
+    请开始生成：""",
             
             "main_program": f"""请生成AFSIM主程序文件（main.txt）。
 
-基于以下项目需求：{query}
+    基于以下项目需求：{query}
 
-项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+    项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
 
-已生成的文件：{chr(10).join(f"- {f}" for f in self.generated_files)}
+    已生成的文件：{chr(10).join(f"- {f}" for f in self.generated_files)}
 
-主程序必须包含：
-1. 必要的导入语句（使用include语句）
-2. 全局变量和常量定义
-3. 场景初始化和设置
-4. 主事件循环
-5. 输出配置
-6. 仿真控制参数
+    主程序必须包含：
+    1. 必要的导入语句（使用include语句）
+    2. 全局变量和常量定义
+    3. 场景初始化和设置
+    4. 主事件循环
+    5. 输出配置
+    6. 仿真控制参数
 
-请生成完整的main.txt文件内容：""",
+    请生成完整的main.txt文件内容：""",
             
             "platforms": f"""请生成AFSIM平台定义文件。
 
-基于项目需求：{query}
+    基于项目需求：{query}
 
-项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+    项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+    已生成的文件：{chr(10).join(f"- {f}" for f in self.generated_files)}
 
-需要生成以下平台的定义：
-{self._get_platform_requirements()}
+    需要生成以下平台的定义：
+    {self._get_platform_requirements()}
 
-每个平台文件应该包含：
-1. 平台类型定义（platform_type）
-2. 物理参数（尺寸、重量、动力等）
-3. 初始状态（位置、速度、方向）
-4. 组件配置（传感器、武器、处理器等）
-5. 行为定义
+    每个平台文件应该包含：
+    1. 平台类型定义（platform_type）
+    2. 物理参数（尺寸、重量、动力等）
+    3. 初始状态（位置、速度、方向）
+    4. 组件配置（传感器、武器、处理器等）
+    5. 行为定义
+    6. 特征信号引用（如适用）
 
-请为每个平台生成单独的.txt文件。
-使用以下格式分隔不同文件：
-=== 平台名称.txt ===
-[平台文件内容]
-=== 另一个平台.txt ===
-[另一个平台文件内容]
+    请为每个平台生成单独的.txt文件。
+    使用以下格式分隔不同文件：
+    === Platform_Name.txt ===
+    [平台文件内容]
+    === 另一个平台.txt ===
+    [另一个平台文件内容]
 
-请开始生成：""",
+    请开始生成：""",
             
             "scenarios": f"""请生成AFSIM场景文件。
 
-基于项目需求：{query}
-已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
+    基于项目需求：{query}
+    项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+    已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
 
-需要创建以下场景：
-1. 主测试场景
-2. 训练场景
-3. 验证场景
+    需要创建以下场景：
+    1. 主测试场景
+    2. 训练场景
+    3. 验证场景
 
-每个场景文件应该包含：
-1. 场景名称和描述
-2. 参与平台及其初始配置
-3. 环境设置（地形、天气、时间）
-4. 任务目标和约束
-5. 事件序列和触发器
+    每个场景文件应该包含：
+    1. 场景名称和描述
+    2. 参与平台及其初始配置
+    3. 环境设置（地形、天气、时间）
+    4. 任务目标和约束
+    5. 事件序列和触发器
 
-请为每个场景生成单独的.txt文件。
-使用以下格式分隔不同文件：
-=== 场景名称.txt ===
-[场景文件内容]
+    请为每个场景生成单独的.txt文件。
+    使用以下格式分隔不同文件：
+    === Scene_Name.txt ===
+    [场景文件内容]
 
-请开始生成：""",
+    请开始生成：""",
             
             "processors": f"""请生成AFSIM处理器文件。
 
-基于项目需求：{query}
-已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
+    基于项目需求：{query}
+    项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+    已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
 
-需要生成以下处理器：
-1. 战术决策处理器
-2. 传感器数据处理处理器
-3. 武器控制处理器
-4. 通信处理器
+    需要生成以下处理器：
+    1. 战术决策处理器
+    2. 传感器数据处理处理器
+    3. 武器控制处理器
+    4. 通信处理器
 
-每个处理器文件应该包含：
-1. 处理器类型定义
-2. 输入输出接口
-3. 处理算法和逻辑
-4. 配置参数
-5. 性能指标
+    每个处理器文件应该包含：
+    1. 处理器类型定义
+    2. 输入输出接口
+    3. 处理算法和逻辑
+    4. 配置参数
+    5. 性能指标
 
-请为每个处理器生成单独的.txt文件。
-使用以下格式分隔不同文件：
-=== 处理器名称.txt ===
-[处理器文件内容]
+    请为每个处理器生成单独的.txt文件。
+    使用以下格式分隔不同文件：
+    === Processor_Name.txt ===
+    [处理器文件内容]
 
-请开始生成：""",
+    请开始生成：""",
             
             "sensors": f"""请生成AFSIM传感器文件。
 
-基于项目需求：{query}
-已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
+    基于项目需求：{query}
+    项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+    已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
 
-需要生成以下传感器：
-1. 雷达传感器
-2. 光电传感器
-3. 电子支援措施（ESM）
-4. 通信传感器
+    需要生成以下传感器：
+    1. 雷达传感器
+    2. 光电传感器
+    3. 电子支援措施（ESM）
+    4. 通信传感器
 
-每个传感器文件应该包含：
-1. 传感器类型定义
-2. 探测参数（范围、精度、分辨率）
-3. 工作模式
-4. 数据输出格式
-5. 功耗和性能
+    每个传感器文件应该包含：
+    1. 传感器类型定义
+    2. 探测参数（范围、精度、分辨率）
+    3. 工作模式
+    4. 数据输出格式
+    5. 功耗和性能
 
-请为每个传感器生成单独的.txt文件。
-使用以下格式分隔不同文件：
-=== 传感器名称.txt ===
-[传感器文件内容]
+    请为每个传感器生成单独的.txt文件。
+    使用以下格式分隔不同文件：
+    === Sensor_Name.txt ===
+    [传感器文件内容]
 
-请开始生成：""",
+    请开始生成：""",
             
             "weapons": f"""请生成AFSIM武器文件。
 
-基于项目需求：{query}
-已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
+    基于项目需求：{query}
+    项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+    已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
 
-需要生成以下武器：
-1. 空对空导弹
-2. 空对地导弹
-3. 机炮系统
-4. 炸弹
+    需要生成以下武器：
+    1. 空对空导弹
+    2. 空对地导弹
+    3. 机炮系统
+    4. 炸弹
 
-每个武器文件应该包含：
-1. 武器类型定义
-2. 性能参数（射程、速度、精度）
-3. 制导系统
-4. 战斗部配置
-5. 发射控制
+    每个武器文件应该包含：
+    1. 武器类型定义
+    2. 性能参数（射程、速度、精度）
+    3. 制导系统
+    4. 战斗部配置
+    5. 发射控制
 
-请为每个武器生成单独的.txt文件。
-使用以下格式分隔不同文件：
-=== 武器名称.txt ===
-[武器文件内容]
+    请为每个武器生成单独的.txt文件。
+    使用以下格式分隔不同文件：
+    === Weapon_Name.txt ===
+    [武器文件内容]
 
-请开始生成：""",
-            
-            "integration": f"""请整合所有生成的AFSIM文件，创建项目文档。
-
-项目需求：{query}
-
-已生成的文件列表：
-{chr(10).join(f"- {f}" for f in self.generated_files)}
-
-需要生成：
-1. README.md - 项目说明文档
-2. run_instructions.txt - 运行说明
-
-README.md应该包含：
-1. 项目概述
-2. 文件结构说明
-3. 平台和组件介绍
-4. 运行方法
-5. 配置说明
-
-run_instructions.txt应该包含：
-1. 运行步骤
-2. 参数配置
-3. 预期输出
-4. 故障排除
-
-请生成完整的文档内容。"""
+    请开始生成："""
         }
         
         instruction = stage_instructions.get(stage_name, f"请根据需求生成{stage_desc}。")
         return instruction
-    
+
     def _get_platform_requirements(self) -> str:
         """获取平台需求描述"""
         if "platforms" in self.project_context:
