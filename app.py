@@ -217,8 +217,8 @@ with gr.Blocks(title="AFSIM RAG代码生成系统") as demo:
         outputs=[msg, chatbot, info_text]
     )
 
-# 启动函数
 def launch_app(share=None, port=None):
+    """启动函数，增加优雅关闭支持"""
     # 从配置获取Web设置
     if share is None:
         share = config.get('web.share', False)
@@ -227,12 +227,23 @@ def launch_app(share=None, port=None):
     
     debug = config.get('web.debug', True)
     
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=port,
-        share=share,
-        debug=debug
-    )
+    try:
+        # 使用更现代的启动方式
+        demo.queue()  # 启用队列以提高性能
+        demo.launch(
+            server_name="0.0.0.0",
+            server_port=port,
+            share=share,
+            debug=debug,
+            show_error=True,
+            prevent_thread_lock=False  # 关键参数：不阻止线程锁
+        )
+    except KeyboardInterrupt:
+        print("\n服务器已正常关闭")
+        return
+    except Exception as e:
+        print(f"服务器启动失败: {e}")
+        raise
 
 if __name__ == "__main__":
     launch_app()

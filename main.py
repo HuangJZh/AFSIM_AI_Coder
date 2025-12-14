@@ -99,14 +99,31 @@ def main():
     
     elif args.mode == "web":
         print(f"启动Web界面... 访问 http://localhost:{port}")
+        print("按 Ctrl+C 停止服务器")
+        
         try:
+            import signal
             from app import launch_app
+            
+            def signal_handler(sig, frame):
+                print("\n正在关闭服务器...")
+                # 尝试更彻底的清理
+                import os
+                os._exit(0)
+            
+            # 设置信号处理器
+            signal.signal(signal.SIGINT, signal_handler)
+            
+            # 启动应用
             launch_app(share=args.share, port=port)
-        except ImportError:
-            print("错误: 找不到app.py")
-            print("请确保app.py在同一个目录下")
+            
+        except KeyboardInterrupt:
+            print("\n服务器已关闭")
+            sys.exit(0)
+        except Exception as e:
+            print(f"启动失败: {e}")
             sys.exit(1)
-    
+        
     elif args.mode == "test":
         print("运行系统测试...")
         test_system()
