@@ -134,17 +134,17 @@ class AFSIMRAGSystem:
                     self.tokenizer.pad_token = self.tokenizer.sep_token or "<pad>"
             
             # 从配置获取加载参数
-            torch_dtype_str = self.config.get('system.torch_dtype', 'float16')
+            dtype_str = self.config.get('system.dtype', 'float16')
             load_in_4bit = self.config.get_bool('system.load_in_4bit', True)
             use_quantization = self.config.get_bool('system.use_quantization', True)
             device_map = self.config.get('system.device_map', 'auto')
             
-            torch_dtype = getattr(torch, torch_dtype_str) if hasattr(torch, torch_dtype_str) else torch.float16
+            dtype = getattr(torch, dtype_str) if hasattr(torch, dtype_str) else torch.float16
             
             # 模型加载参数
             model_kwargs = {
                 "trust_remote_code": True,
-                "torch_dtype": torch_dtype,
+                "dtype": dtype,
                 "device_map": device_map,
             }
             
@@ -154,7 +154,7 @@ class AFSIMRAGSystem:
                     from transformers import BitsAndBytesConfig
                     bnb_config = BitsAndBytesConfig(
                         load_in_4bit=True,
-                        bnb_4bit_compute_dtype=torch_dtype,
+                        bnb_4bit_compute_dtype=dtype,
                         bnb_4bit_use_double_quant=True,
                         bnb_4bit_quant_type="nf4"
                     )
@@ -595,18 +595,14 @@ class AFSIMRAGSystem:
     
     def format_prompt(self, query: str, retrieved_docs: List[Dict]) -> str:
         """格式化提示词"""
-        system_prompt = """你是一个AFSIM（Advanced Framework for Simulation）专家助手，专门帮助用户编写AFSIM仿真代码。
+        system_prompt = """你是AFSIM专家助手，专门帮助用户编写AFSIM仿真代码。
 你的任务是基于提供的教程内容和上下文，**只要生成准确、完整、可运行的AFSIM代码**。
 
 请遵循以下规则：
-1. 代码必须是有效的AFSIM代码
-2. 包含必要的注释说明
-3. 如果可能，提供代码使用示例
-4. 如果问题不明确，请求澄清
-5. 优先使用提供的教程内容作为参考
-6. 保持代码简洁高效
+1. 只输出有效的AFSIM代码
+2. 保持代码简洁高效
 
-直接给出AFSIM代码"""
+AFSIM代码："""
 
         if not retrieved_docs:
             context = "没有找到相关的教程内容，请基于你的知识回答。"

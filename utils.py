@@ -96,7 +96,7 @@ class ConfigManager:
                 },
                 'system': {
                     'device_map': "auto",
-                    'torch_dtype': "float16",
+                    'dtype': "float16",
                     'load_in_4bit': True,
                     'use_quantization': True
                 }
