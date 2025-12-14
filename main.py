@@ -148,7 +148,7 @@ def main():
         print("按 Ctrl+C 停止服务器")
         
         try:
-            from app import launch_app
+            from fastapi_app import launch_app
             
             def signal_handler(sig, frame):
                 print("\n正在关闭服务器...")

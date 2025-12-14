@@ -596,7 +596,7 @@ class AFSIMRAGSystem:
     def format_prompt(self, query: str, retrieved_docs: List[Dict]) -> str:
         """格式化提示词"""
         system_prompt = """你是一个AFSIM（Advanced Framework for Simulation）专家助手，专门帮助用户编写AFSIM仿真代码。
-你的任务是基于提供的教程内容和上下文，生成准确、完整、可运行的AFSIM代码。
+你的任务是基于提供的教程内容和上下文，**只要生成准确、完整、可运行的AFSIM代码**。
 
 请遵循以下规则：
 1. 代码必须是有效的AFSIM代码
@@ -606,7 +606,7 @@ class AFSIMRAGSystem:
 5. 优先使用提供的教程内容作为参考
 6. 保持代码简洁高效
 
-现在，请基于以下信息回答用户问题："""
+直接给出AFSIM代码"""
 
         if not retrieved_docs:
             context = "没有找到相关的教程内容，请基于你的知识回答。"
