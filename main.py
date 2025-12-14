@@ -139,7 +139,7 @@ def show_main_menu():
     print("\n" + "=" * 80)
     print("AFSIM 智能代码生成系统")
     print("=" * 80)
-    print("1. 🚀 生成完整项目 (多阶段)")
+    print("1. 🚀 生成项目")
     print("2. 💬 单轮对话模式")
     print("3. 📊 查看系统信息")
     print("4. 🔍 测试检索功能")
@@ -476,7 +476,16 @@ def main():
                 break
             
             elif choice == "1":
-                # 生成完整项目
+                # 生成项目 (询问用户选择)
+                print("\n" + "-" * 40)
+                print("请选择生成模式:")
+                print("1. 📂 多文件项目结构 (适用于复杂项目)")
+                print("2. 📄 单文件完整脚本 (适用于简单测试)")
+                print("-" * 40)
+                
+                mode_choice = input("请输入选项 (1/2): ").strip()
+                single_file_mode = (mode_choice == "2")
+                
                 requirements = collect_project_requirements()
                 if requirements == "CANCEL":
                     continue
@@ -484,22 +493,24 @@ def main():
                     print("❌ 未输入有效需求")
                     continue
                 
+                mode_str = "单文件" if single_file_mode else "多文件"
                 print(f"\n🔍 分析需求: {requirements[:100]}...")
-                print("🚀 开始多阶段项目生成...")
+                print(f"🚀 开始{mode_str}项目生成...")
                 
                 start_time = time.time()
                 
                 try:
                     # 使用多阶段生成
                     if isinstance(chat_system, MultiStageChatSystem):
-                        result = chat_system.generate_complete_project(requirements)
+                        # 传入 single_file_mode 参数
+                        result = chat_system.generate_complete_project(requirements, single_file_mode=single_file_mode)
                     else:
                         # 如果当前不是多阶段系统，创建临时实例
                         multi_stage_system = MultiStageChatSystem(
                             project_root=project_root,
                             model_path=model_path
                         )
-                        result = multi_stage_system.generate_complete_project(requirements)
+                        result = multi_stage_system.generate_complete_project(requirements, single_file_mode=single_file_mode)
                     
                     end_time = time.time()
                     

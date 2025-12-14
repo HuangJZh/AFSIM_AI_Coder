@@ -13,7 +13,7 @@ class AFSimProjectStructure:
     def __init__(self):
         self.config = ConfigManager()
     
-    def analyze_requirements(self, query: str) -> Dict:
+    def analyze_requirements(self, query: str, single_file_mode: bool = False) -> Dict:
         """分析需求，确定项目结构"""
         query_lower = query.lower()
                 
@@ -21,12 +21,12 @@ class AFSimProjectStructure:
         components = self._detect_components(query_lower)
         
         # 构建项目结构
-        structure = self._build_project_structure(components)
+        structure = self._build_project_structure(components, single_file_mode)
         
         return {
             "components": components,
             "structure": structure,
-            "stages": self._generate_stages(components)
+            "stages": self._generate_stages(components, single_file_mode)
         }
     
     def _detect_components(self, query: str) -> Dict[str, bool]:
@@ -52,8 +52,14 @@ class AFSimProjectStructure:
             ]),
         }
     
-    def _build_project_structure(self, components: Dict) -> Dict:
+    def _build_project_structure(self, components: Dict, single_file_mode: bool) -> Dict:
         """构建项目结构"""
+        if single_file_mode:
+            return {
+                "files": ["simulation_script.txt", "README.md"],
+                "folders": []
+            }
+
         structure = {
             "files": ["main.txt", "README.md", "project_structure.json"],
             "folders": []
@@ -82,13 +88,23 @@ class AFSimProjectStructure:
         
         return structure
     
-    def _generate_stages(self, components: Dict) -> List[Dict]:
+    def _generate_stages(self, components: Dict, single_file_mode: bool) -> List[Dict]:
         """生成阶段计划"""
-        config_stages = self.config.get('generation.stages', [])
-        
-        # 创建阶段列表
         stages = []
         
+        if single_file_mode:
+            # 单文件模式：只有一个综合生成阶段
+            stages.append({
+                "name": "single_file_generation",
+                "description": "生成完整的AFSIM仿真脚本（包含所有定义和场景）",
+                "max_tokens": 3500,  # 增加token限制以容纳长代码
+                "temperature": 0.2,
+                "depends_on": [],
+                "output_patterns": ["simulation_script.txt"]
+            })
+            return stages
+
+        # 多文件模式：原有的分阶段逻辑
         # 首先添加项目结构阶段
         stages.append({
             "name": "project_structure",
@@ -163,19 +179,20 @@ class MultiStageGenerator:
         self.project_context = {}
         self.stage_results = {}
 
-    def generate_project(self, query: str, output_dir: str = None) -> Dict:
+    def generate_project(self, query: str, output_dir: str = None, single_file_mode: bool = False) -> Dict:
         """生成完整的AFSIM项目"""
         try:
             # 1. 分析需求
-            self.logger.info("分析项目需求...")
-            project_analysis = self.project_analyzer.analyze_requirements(query)
+            self.logger.info(f"分析项目需求 (单文件模式: {single_file_mode})...")
+            project_analysis = self.project_analyzer.analyze_requirements(query, single_file_mode)
             
             # 2. 准备输出目录
             if not output_dir:
                 timestamp = time.strftime("%Y%m%d_%H%M%S")
+                suffix = "_single" if single_file_mode else ""
                 output_dir = os.path.join(
                     self.config.get('generation.output.base_dir', 'generated_projects'),
-                    f"afsim_project_{timestamp}"
+                    f"afsim_project{suffix}_{timestamp}"
                 )
             
             os.makedirs(output_dir, exist_ok=True)
@@ -186,7 +203,8 @@ class MultiStageGenerator:
                 "output_dir": output_dir,
                 "query": query,
                 "start_time": time.time(),
-                "stages": {}
+                "stages": {},
+                "single_file_mode": single_file_mode
             }
             
             # 创建项目结构
@@ -208,7 +226,7 @@ class MultiStageGenerator:
                 
                 # 执行阶段生成
                 stage_start = time.time()
-                result = self._execute_stage(stage_info, query, output_dir)
+                result = self._execute_stage(stage_info, query, output_dir, single_file_mode)
                 stage_duration = time.time() - stage_start
                 
                 # 记录结果
@@ -271,27 +289,48 @@ class MultiStageGenerator:
         
         return True
     
-    def _execute_stage(self, stage_info: Dict, query: str, output_dir: str) -> Dict:
+    def _execute_stage(self, stage_info: Dict, query: str, output_dir: str, single_file_mode: bool) -> Dict:
         """执行单个生成阶段"""
         stage_name = stage_info["name"]
         
         try:
             # 检查是否有阶段感知的RAG系统
             if hasattr(self.chat_system, 'generate_stage_response'):
-                # 使用阶段感知RAG生成
-                result = self.chat_system.generate_stage_response(
-                    stage_name=stage_name,
-                    query=query,
-                    project_context=self.project_context
-                )
+                # 如果是单文件模式，使用特定的提示词策略
+                if single_file_mode:
+                    prompt = f"""
+你需要生成一个完整的、可运行的AFSIM仿真脚本文件，包含所有必要的组件定义和场景配置。
+请将所有内容整合在一个文件中，不要使用 include 语句引用外部文件。
+
+用户需求:
+{query}
+
+请确保包含：
+1. 必要的全局配置（如日志路径）
+2. 平台类型定义（包含移动器、传感器、武器等组件）
+3. 场景布局（红蓝方平台实例、位置、航线）
+4. 仿真控制（结束时间、事件输出等）
+
+请直接输出完整的代码内容。
+"""
+                    # 复用 main_program 阶段的 RAG 知识，或者使用通用的 generate_enhanced_response
+                    rag_result = self.chat_system.generate_enhanced_response(prompt)
+                else:
+                    # 使用阶段感知RAG生成
+                    result = self.chat_system.generate_stage_response(
+                        stage_name=stage_name,
+                        query=query,
+                        project_context=self.project_context
+                    )
+                    rag_result = result
                 
-                if not result or "result" not in result:
+                if not rag_result or "result" not in rag_result:
                     return {
                         "success": False,
                         "error": "生成结果为空"
                     }
                 
-                generated_content = result["result"]
+                generated_content = rag_result["result"]
                 
             else:
                 # 回退到原来的方法
@@ -307,7 +346,7 @@ class MultiStageGenerator:
                 generated_content = rag_result["result"]
             
             # 提取文件内容
-            files = self._extract_files_from_content(generated_content, stage_info, output_dir)
+            files = self._extract_files_from_content(generated_content, stage_info, output_dir, single_file_mode)
             
             # 保存文件
             output_files = self._save_generated_files(files, output_dir)
@@ -329,11 +368,22 @@ class MultiStageGenerator:
                 "error": str(e)
             }
     
-    def _extract_files_from_content(self, content: str, stage_info: Dict, output_dir: str) -> List[Dict]:
+    def _extract_files_from_content(self, content: str, stage_info: Dict, output_dir: str, single_file_mode: bool) -> List[Dict]:
         """从生成的内容中提取文件"""
         files = []
         stage_name = stage_info["name"]
         
+        if single_file_mode:
+            # 单文件模式：直接保存所有内容到一个文件
+            # 尝试清理一下可能存在的 markdown 代码块标记
+            content = re.sub(r'^```\w*\n', '', content)
+            content = re.sub(r'\n```$', '', content)
+            files.append({
+                "path": "simulation_script.txt",
+                "content": content.strip()
+            })
+            return files
+
         if stage_name == "project_structure":
             # 尝试解析JSON
             try:
@@ -443,7 +493,8 @@ class MultiStageGenerator:
                 "output_dir": self.current_project["output_dir"],
                 "query": self.current_project["query"],
                 "total_duration": total_duration,
-                "generated_files_count": len(self.generated_files)
+                "generated_files_count": len(self.generated_files),
+                "mode": "Single File" if self.current_project.get("single_file_mode") else "Multi-Stage"
             },
             "analysis": self.current_project["analysis"],
             "stage_results": self.current_project["stages"],
@@ -478,19 +529,20 @@ class MultiStageChatSystem:
         # 初始化多阶段生成器
         self.multi_stage_generator = MultiStageGenerator(self.chat_system)
     
-    def generate_complete_project(self, query: str, output_dir: str = None) -> Dict:
+    def generate_complete_project(self, query: str, output_dir: str = None, single_file_mode: bool = False) -> Dict:
         """生成完整的AFSIM项目"""
-        self.logger.info(f"开始生成完整项目: {query[:100]}...")
+        self.logger.info(f"开始生成完整项目 (单文件模式: {single_file_mode}): {query[:100]}...")
         
         # 使用多阶段生成器
-        result = self.multi_stage_generator.generate_project(query, output_dir)
+        result = self.multi_stage_generator.generate_project(query, output_dir, single_file_mode)
         
         # 记录到对话历史
         self.chat_system.conversation_history.append({
             'query': query,
             'type': 'project_generation',
             'result': result,
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'single_file_mode': single_file_mode
         })
         
         return result
