@@ -49,3 +49,4 @@ system:
   device_map: "auto"
   torch_dtype: "float16"
   load_in_4bit: true
+  use_quantization: true

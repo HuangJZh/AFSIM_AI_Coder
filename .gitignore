@@ -5,5 +5,6 @@ __pycache__/
 chroma_db/
 exports/
 afsim_coder.log
+afsim_rag.log
 *.log
 project_analysis_report.json
