@@ -3,7 +3,7 @@ import json
 import re
 import time
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from utils import ConfigManager
 
 
@@ -599,6 +599,18 @@ class MultiStageChatSystem:
         
         return result
     
+    # === 新增方法代理 ===
+    
+    def generate_code_repair_response(self, code: str, error_log: str) -> Dict[str, Any]:
+        """生成代码修复建议 (代理)"""
+        return self.chat_system.generate_code_repair_response(code, error_log)
+
+    def generate_enhanced_response(self, query: str) -> Dict[str, Any]:
+        """生成增强的回答 (代理)"""
+        return self.chat_system.generate_enhanced_response(query)
+    
+    # ====================
+
     def get_project_info(self):
         """获取项目信息"""
         return self.chat_system.get_project_info()

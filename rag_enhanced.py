@@ -90,6 +90,9 @@ class EnhancedRAGChatSystem:
                 padding_side='left'
             )
             
+            # === 关键修改：设置截断方向为左侧，保留Prompt末尾的指令 ===
+            tokenizer.truncation_side = 'left' 
+            
             if tokenizer.pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token
             
@@ -137,7 +140,7 @@ class EnhancedRAGChatSystem:
         return self.build_knowledge_base()
     
     def build_knowledge_base(self):
-        """构建知识库 - 修复批量大小问题"""
+        """构建知识库"""
         self.logger.info("开始处理文档构建知识库...")
         start_time = time.time()
 
@@ -262,11 +265,14 @@ class EnhancedRAGChatSystem:
             
             def __call__(self, prompt):
                 try:
+                    # 使用配置中的最大长度，或者默认为4096 (保留更多上下文)
+                    max_len = 32000 
+                    
                     inputs = self.tokenizer(
                         prompt, 
                         return_tensors="pt", 
                         truncation=True, 
-                        max_length=32000,
+                        max_length=max_len,
                         padding=True
                     )
                     inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
@@ -397,6 +403,75 @@ class EnhancedRAGChatSystem:
             project_learner=self.project_learner
         )
     
+    # === 新增代码修复方法 (增强版) ===
+    def generate_code_repair_response(self, code: str, error_log: str) -> Dict[str, Any]:
+        """生成代码修复建议"""
+        self.logger.info("正在执行代码修复...")
+        try:
+            # 1. 提取错误关键信息进行RAG检索
+            search_query = f"AFSIM code error: {error_log[:200]}"
+            
+            # 使用检索器查找相关文档
+            docs = self.enhanced_qa_chain.retriever.get_relevant_documents(search_query)
+            
+            # 2. 构建修复提示词
+            context_docs = ""
+            for i, doc in enumerate(docs[:3], 1):
+                context_docs += f"参考文档 {i}:\n{doc.page_content[:400]}...\n\n"
+
+            # 转义大括号，防止 f-string 错误
+            safe_code = code.replace("{", "{{").replace("}", "}}")
+            safe_error = error_log.replace("{", "{{").replace("}", "}}")
+
+            prompt = f"""
+你是一个AFSIM仿真脚本代码修复专家。请根据以下错误信息修复代码。
+
+=== 📚 参考语法文档 ===
+{context_docs}
+
+=== ❌ 错误代码 ===
+{safe_code}
+
+=== ⚠️ 报错信息 ===
+{safe_error}
+
+=== 🛠️ 修复任务 ===
+1. 分析报错原因。
+2. 根据参考文档修正代码中的语法错误或逻辑错误。
+3. **强制使用标记包裹**：将修复后的完整代码包裹在 `<<<CODE_START>>>` 和 `<<<CODE_END>>>` 之间。
+4. **严禁输出解释**：只输出修复后的代码，不要输出“我已修复”、“原因如下”等废话。
+
+请立即输出修复后的代码：
+"""
+            # 3. 调用LLM
+            response = self.enhanced_qa_chain.llm(prompt)
+            
+            # 4. 提取代码 (增强鲁棒性)
+            code_match = re.search(r'<<<CODE_START>>>\s*(.*?)\s*<<<CODE_END>>>', response, re.DOTALL)
+            if code_match:
+                final_result = code_match.group(1)
+            else:
+                # 兜底1：尝试提取markdown块
+                code_block = re.search(r'```(?:afsim|txt|)\s*(.*?)\s*```', response, re.DOTALL)
+                if code_block:
+                    final_result = code_block.group(1)
+                else:
+                    # 兜底2：如果提取不到，返回原始Response，并打印警告
+                    self.logger.warning("未找到代码标记或Markdown块，返回原始回答。")
+                    final_result = response
+            
+            return {
+                "result": final_result.strip(),
+                "source_documents": docs
+            }
+
+        except Exception as e:
+            self.logger.error(f"代码修复失败: {e}")
+            return {
+                "result": f"修复失败: {str(e)}",
+                "source_documents": []
+            }
+            
     def generate_enhanced_response(self, query: str) -> Dict[str, Any]:
         """生成增强的回答"""
         try:
@@ -442,6 +517,7 @@ class EnhancedRAGChatSystem:
 
 
 class StageAwareRAGSystem:
+    # ... (保持原来的 StageAwareRAGSystem 类内容不变)
     """简化的阶段感知RAG系统"""
     
     def __init__(self, project_learner: AFSIMProjectLearner, vector_db, embeddings, model, tokenizer):
@@ -550,6 +626,7 @@ class StageAwareRAGSystem:
 
 
 class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
+    # ... (保持原来的 EnhancedStageAwareRAGChatSystem 类内容不变)
     """增强的阶段感知RAG聊天系统"""
     
     def __init__(self, *args, **kwargs):

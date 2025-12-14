@@ -340,11 +340,30 @@ def system_settings():
             for key, value in config_data.items():
                 print(f"{key}: {value}")
 
+def _collect_multiline_input(prompt_text):
+    """辅助函数：收集多行输入"""
+    print(f"\n{prompt_text}")
+    print("（输入 //end 结束，直接回车取消）")
+    print("-" * 40)
+    
+    lines = []
+    while True:
+        try:
+            line = input().strip()
+            if line == "//end":
+                return "\n".join(lines)
+            if not line and not lines:  # 第一行直接回车则取消
+                return None
+            lines.append(line)
+        except EOFError:
+            return "\n".join(lines)
+
 def single_chat_mode(chat_system):
     """单轮对话模式"""
     print("\n" + "=" * 80)
     print("单轮对话模式")
     print("=" * 80)
+    print("输入 '/repair' 进入代码修复模式")
     print("输入 'quit' 或 'exit' 返回主菜单")
     print("-" * 80)
     
@@ -355,6 +374,40 @@ def single_chat_mode(chat_system):
         if user_input.lower() in ['quit', 'exit', 'q', '0']:
             print("返回主菜单...")
             break
+
+        # === 新增代码修复入口 ===
+        if user_input.lower() == '/repair':
+            code_input = _collect_multiline_input("请粘贴有问题代码：")
+            if not code_input:
+                print("⚠️  未输入代码，已取消")
+                continue
+                
+            error_input = _collect_multiline_input("请粘贴报错信息：")
+            if not error_input:
+                print("⚠️  未输入报错信息，已取消")
+                continue
+                
+            print("🛠️  正在分析错误并修复...")
+            start_time = time.time()
+            
+            try:
+                # 调用我们在 rag_enhanced.py 中新增的方法
+                response = chat_system.generate_code_repair_response(code_input, error_input)
+                
+                end_time = time.time()
+                print(f"\n✅ 修复完成 (耗时: {end_time - start_time:.2f}秒):")
+                print("-" * 50)
+                print(response.get("result", "未生成回答"))
+                print("-" * 50)
+                
+                if response.get("source_documents"):
+                    print(f"\n📚 参考了 {len(response['source_documents'])} 个语法文档")
+
+            except Exception as e:
+                print(f"❌ 修复过程出错: {e}")
+            
+            continue
+        # ========================
         
         if not user_input:
             continue
