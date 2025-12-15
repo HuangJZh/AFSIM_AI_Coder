@@ -213,4 +213,3 @@ platform_type BOMBER WSF_PLATFORM
     // ...
 end_platform_type
 ```
-```

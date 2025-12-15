@@ -154,4 +154,3 @@ event_output
     enable SENSOR_TRACK_INITIATED // 传感器航迹建立
 end_event_output
 ```
-```

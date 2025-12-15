@@ -1,14 +1,14 @@
 model:
   path: "D:/Qwen/Qwen/Qwen3-4B"
-  max_tokens: 4096
-  temperature: 0.2
+  max_tokens: 8192
+  temperature: 0.6
   # Qwen3-4B 特定配置
   generation:
-    max_new_tokens: 1024
+    max_new_tokens: 3500
     temperature: 0.3
     top_p: 0.9
     do_sample: true
-    repetition_penalty: 1.1
+    repetition_penalty: 1.2
   
 vector_db:
   chunk_size: 1500

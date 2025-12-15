@@ -21,7 +21,7 @@
 - `platforms/`: 存放具体平台实例定义的文件夹。
 - `scenarios/`: 存放具体场景布局 (Laydown) 的文件。
 
-## 4. 脚本语法示例
+## xxxxxxxxxx // scenarios/red_laydown.txt 或 blue_laydown.txtplatform ship SHIP    position 30:23:20.040n 80:55:06.960w    side red    icon carrier​    route // 航线定义开始        // 航点 0 (起点, 可定义标签方便跳转)        label Start         position 30:23:20.040n 80:55:06.960w altitude 0.00 ft         speed 30 nm/h // 初始速度：30节 ​        // 航点 1        position 30:30:07.579n 80:54:49.205w altitude 0.00 ft ​        // 航点 2        position 30:28:38.694n 80:48:17.450w altitude 0.00 ft ​        // 航点 3 (Loop point)        position 30:24:28.057n 80:48:21.408w altitude 0.00 ft ​        goto Start // 循环指令：在航线末尾返回到标记为 'Start' 的航点     end_route // 航线定义结束 end_platform afsim
 
 ### 定义平台类型 (setup.txt)
 平台类型通常在 `setup.txt` 中定义，使用 `platform_type` 和 `end_platform_type` 关键字。

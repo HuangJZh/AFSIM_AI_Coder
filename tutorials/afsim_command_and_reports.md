@@ -108,4 +108,3 @@ processor data_mgr WSF_TRACK_PROCESSOR
     report_to_group blue via blue_comm
 end_processor
 ```
-```
