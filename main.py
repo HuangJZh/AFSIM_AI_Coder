@@ -123,6 +123,7 @@ def main():
     print(f"API: {API_BASE_URL}")
     print(f"模型: {MODEL_NAME}")
     print("使用说明: 输入多行内容，最后另起一行输入 //end 提交")
+    print("输入 'clear' 或 'reset' (单独一行) 清空对话历史")
     print("输入 'quit' 或 'exit' (单独一行) 退出程序")
     print("="*50 + "\n")
 
@@ -148,8 +149,18 @@ def main():
             user_input = "\n".join(lines)
             # --- 修改结束 ---
 
+            #清空历史的逻辑
+            if user_input.strip().lower() in ['clear', 'reset']:
+                print(f"[调试] 清空前历史条数: {len(conversation_history)}") # 调试信息
+                conversation_history = []  # 清空列表
+                print(f"[调试] 清空后历史条数: {len(conversation_history)}") # 确认清空
+                print("\n[系统] 对话历史已清空。\n")
+                continue
+            # --------------------------
+
             # 检查退出命令
             if user_input.strip().lower() in ['quit', 'exit']:
+                # 退出程序时，内存自动释放，不需要额外操作
                 break
             
             if not user_input.strip():
