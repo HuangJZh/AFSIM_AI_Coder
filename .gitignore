@@ -4,6 +4,7 @@ generated_projects/
 __pycache__/
 chroma_db/
 exports/
+logs/
 afsim_coder.log
 afsim_rag.log
 *.log
