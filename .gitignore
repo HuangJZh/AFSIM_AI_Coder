@@ -1,11 +1,4 @@
-vector_db_afsim_enhanced/
-demos/
-generated_projects/
 __pycache__/
+cache/
 chroma_db/
-exports/
-logs/
-afsim_coder.log
-afsim_rag.log
-*.log
-project_analysis_report.json
+demos/
