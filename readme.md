@@ -1,10 +1,10 @@
-# 🚀 AFSIM 智能代码生成与调试助手（轻量级 API 版）
+#  AFSIM 智能代码生成与调试助手（轻量级 API 版）
 
 一个基于 DeepSeek API 的 AFSIM 代码生成与调试辅助工具，支持本地知识库检索、代码修复、多模式交互，适用于 AFSIM 仿真建模与脚本开发。
 
 ---
 
-## 📦 项目结构
+## 项目结构
 
 ```
 .
@@ -14,11 +14,6 @@
 │  task_results_summary.txt   # 任务结果摘要
 │
 ├─cache                       # 缓存目录（自动生成）
-├─demos                       # AFSIM 示例项目集（含输出目录）
-│  ├─aea_iads
-│  ├─alternate_locations
-│  ├─alv_routing
-│  └─...
 ├─tutorials                   # 本地知识库：AFSIM 教程与规范文档
 │      afsim_command_and_reports.md
 │      afsim_error_collection.md
@@ -34,7 +29,7 @@
 
 ---
 
-## ✨ 核心功能
+## 核心功能
 
 ### 1. **智能代码生成**
 - 根据自然语言需求生成符合 AFSIM 语法的代码
@@ -56,12 +51,12 @@
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
 ### 环境要求
 - Python 3.8+
 - 网络连接（用于调用 DeepSeek API）
-- 有效的 DeepSeek API Key
+- 有效的 DeepSeek API Key 或者其他可用的api提供商
 
 ### 安装依赖
 ```bash
@@ -83,7 +78,7 @@ python main.py
 
 ---
 
-## 🧠 使用指南
+## 使用指南
 
 ### 模式选择
 启动后，系统提供两种模式：
@@ -112,7 +107,7 @@ python main.py
 
 ---
 
-## 📚 知识库管理
+## 知识库管理
 
 ### 目录结构
 - `./tutorials/` 存放所有教程文档
@@ -123,7 +118,7 @@ python main.py
 
 ---
 
-## ⚙️ 配置说明
+## 配置说明
 
 ### 主要参数（main.py 顶部）
 | 变量名 | 说明 |
@@ -134,13 +129,12 @@ python main.py
 | `KNOWLEDGE_DIR` | 本地知识库目录（默认 ./tutorials） |
 
 ### 系统提示词
-- 内置专家角色设定
 - 包含知识库内容作为参考
 - 支持生成与修复两种模式
 
 ---
 
-## 🐛 常见问题
+## 常见问题
 
 ### 1. API 调用失败
 - 检查网络连接
@@ -163,7 +157,7 @@ python main.py
 
 ---
 
-## 📮 支持与反馈
+## 支持与反馈
 
 如遇到问题或建议，请：
 1. 检查 `tutorials` 目录内容是否完整
@@ -176,5 +170,3 @@ python main.py
 ```bash
 python main.py
 ```
-
-选择模式，输入需求，即可开始生成或修复你的 AFSIM 代码！
