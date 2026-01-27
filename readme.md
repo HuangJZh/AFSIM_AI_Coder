@@ -12,7 +12,7 @@
 │  readme.md                  # 项目说明文档
 │  tasks.txt                  # 待处理任务清单
 │  task_results_summary.txt   # 任务结果摘要
-│
+│  .env                       # apikey
 ├─cache                       # 缓存目录（自动生成）
 ├─tutorials                   # 本地知识库：AFSIM 教程与规范文档
 │      afsim_command_and_reports.md
@@ -64,11 +64,13 @@ pip install -r requirements.txt
 ```
 
 ### 配置 API Key
-在 `main.py` 中修改以下变量：
-```python
-API_KEY = "sk-your-actual-api-key"  # 替换为你的真实 API Key
-API_BASE_URL = "https://api.deepseek.com" # 或者其他api提供商
-MODEL_NAME = "deepseek-chat"
+
+在根目录下新建`.env`
+
+编辑 `.env` 文件，填入您的 API Key：
+```env
+   DEEPSEEK_API_KEY=sk-your-actual-api-key  # 替换为你的 API Key
+   DEEPSEEK_API_BASE=https://api.deepseek.com  # 或者其他API提供商
 ```
 
 ### 启动程序
