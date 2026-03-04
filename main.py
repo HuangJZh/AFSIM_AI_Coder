@@ -7,7 +7,7 @@ import time
 import requests  
 
 API_BASE_URL = "https://api.deepseek.com"  
-API_KEY = "sk-75ed608c4f8342c6934bb5c6f9cb4888"  
+API_KEY = "sk-bfc6ac650b1e431dbfec1e2ef49546ee"  
 MODEL_NAME = "deepseek-chat"  
 
 KNOWLEDGE_DIR = "./tutorials"  

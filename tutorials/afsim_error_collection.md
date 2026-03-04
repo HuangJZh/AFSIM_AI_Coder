@@ -10,3 +10,21 @@
 0.0 1700 kts是错误的，正确的语法是0.0 s 1700 kts，以此类推
 radius 500 m probability 0.8 是错误的，正确的语法是radius_and_pk 500 m 0.8，以此类推
 execute at time 600 sec absolute 是错误的，正确的语法是 execute at_time 600 s absolute，以此类推
+
+错误代码：
+    mover WSF_SPACE_MOVER
+        // 设置轨道参数
+        altitude 800 km
+        heading 0 deg
+        position 0:00:00.000n 100:00:00.000e
+    end_mover
+报错信息：
+***** FATAL: Could not process input files. 
+    ***** ERROR: Unknown command: altitude 
+             'task1.txt', line 9, near column 17 
+修正后代码：
+    mover WSF_SPACE_MOVER
+        // 设置轨道参数
+        position 0:00:00.000n 100:00:00.000e altitude 800 km
+        heading 0 deg
+    end_mover

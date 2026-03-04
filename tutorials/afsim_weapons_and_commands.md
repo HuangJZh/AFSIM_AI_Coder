@@ -33,11 +33,11 @@ platform_type ATA-MISSILE WSF_PLATFORM
     // 移动器：用于飞行特性
     mover WSF_STRAIGHT_LINE_MOVER
         // 飞行时间/速度曲线 (示例)
-        update_interval 0.5 s
+        update_interval .5 s
         tof_and_speed
-            0.0 1700 kts
-            20.0 1500 kts
-            40.0 1300 kts
+            0.0 s 1700 kts
+            20.0 s 1500 kts
+            40.0 s 1300 kts
         end_tof_and_speed
         maximum_lateral_acceleration 9.0 g
         guidance_mode lead_pursuit
