@@ -3,27 +3,26 @@
 ## 1. 武器类型与组件结构
 
 ### 1.1 武器类型定义
-
-* 显式武器 (Explicit Weapon)：会离开发射平台（如导弹），需要一个可发射的平台类型定义。
-* 隐式武器 (Implicit Weapon)：不会离开发射平台（如干扰机、激光），作为平台部件附着。
-* 预定义类型示例：WSF_EXPLICIT_WEAPON, WSF_RF_JAMMER, WSF_LASER_WEAPON。
+在 AFSIM 中，武器系统分为两大类：
+显式武器 (Explicit Weapon)：会离开发射平台（如导弹），需要一个可发射的平台类型定义。
+隐式武器 (Implicit Weapon)：不会离开发射平台（如干扰机、激光），作为平台部件附着。
+预定义武器类型列表：
+WSF_EXPLICIT_WEAPON：标准显式武器。
+WSF_IMPLICIT_WEAPON：标准隐式武器。
+WSF_RF_JAMMER：射频干扰机。
+WSF_LASER_WEAPON：激光武器。
+WSF_CUED_LASER_WEAPON：引导式激光武器。
+WSF_CHAFF_WEAPON：干扰箔武器。
 
 ### 1.2 武器定义 (Weapon Definition Block) 结构
-
-一个完整的武器系统定义（例如空对空导弹）通常包含三个主要部分：
-
-1.  被发射平台描述 (Launched Platform Description)：定义导弹自身的平台类型。
-2.  武器效果 (Weapon Effect)：定义武器对目标造成的影响（杀伤力）。
-3.  武器块 (Weapon Definition Block)：聚合上述组件并定义武器对象类。
-
----
+一个完整的武器系统是通过聚合多个组件构成的，主要包含：
+被发射平台描述 (Launched Platform Description)：定义导弹/武器自身的物理特性（运动、追踪、引信、图标）。
+武器效果 (Weapon Effect)：定义武器对目标的杀伤力。
+武器对象类 (Weapon Definition Block)：将上述组件聚合，并定义携带数量。
+发射平台 (Launching Platform)：携带并使用武器的平台。
 
 ## 2. 步骤 1：定义被发射平台（导弹）
-
 导弹本质上是一个具有特殊行为的平台类型。它需要定义自己的运动、追踪和引信。
-
-### 语法示例：`ATA-MISSILE` 平台类型
-
 ```afsim
 // 步骤 1：定义导弹的平台类型
 platform_type ATA-MISSILE WSF_PLATFORM
@@ -58,12 +57,12 @@ end_platform_type
 
 ## 3. 步骤 2：定义武器效果 (Weapon Effect)
 武器效果定义了武器的杀伤效力（Lethality）。它通过 weapon_effects ... end_weapon_effects 块定义，通常派生自预定义的杀伤类型。
-
-语法示例：球形杀伤力 (WSF_SPHERICAL_LETHALITY)
-代码段
-
+常见杀伤力类型
+WSF_SPHERICAL_LETHALITY：球形杀伤力（基于距离和指数）。
+WSF_GRADUATED_LETHALITY：分级杀伤力（基于距离和概率）。
+其他类型包括：WSF_CARLTON_LETHALITY, WSF_EXOATMOSPHERIC_LETHALITY, WSF_HEL_LETHALITY 等。
 ```afsim
-// 步骤 2：定义武器的杀伤效果
+// 步骤 2：定义球形杀伤效果
 weapon_effects ATA-MISSILE-EFFECTS WSF_SPHERICAL_LETHALITY
     // 定义杀伤半径范围
     minimum_radius 1000 m
@@ -71,19 +70,10 @@ weapon_effects ATA-MISSILE-EFFECTS WSF_SPHERICAL_LETHALITY
 end_weapon_effects
 ```
 
-预定义杀伤力类型
-WSF_SPHERICAL_LETHALITY：球形杀伤力（基于距离和指数）。
-
-WSF_GRADUATED_LETHALITY：分级杀伤力（基于距离和概率）。
-
-其他类型包括：WSF_CARLTON_LETHALITY, WSF_EXOATMOSPHERIC_LETHALITY, WSF_HEL_LETHALITY 等。
-
 ## 4. 步骤 3 & 4：创建武器块并加载到平台
+
 ### 4.1 创建武器对象类 (Weapon Definition Block)
 武器块 (weapon ... end_weapon) 聚合了导弹类型和武器效果，创建了一个可被平台携带的武器对象类。
-
-代码段
-
 ```afsim
 // 步骤 3：定义武器对象类 (GBU-39)
 weapon GBU-39 WSF_EXPLICIT_WEAPON
@@ -100,9 +90,6 @@ end_weapon
 
 ### 4.2 隐式武器示例（干扰机）
 隐式武器（如干扰机）派生自 WSF_RF_JAMMER，不指定 launched_platform_type。
-
-代码段
-
 ```afsim
 // 干扰机武器示例
 weapon SOJ_VHF_JAMMER WSF_RF_JAMMER
@@ -122,9 +109,6 @@ end_weapon
 
 ### 4.3 加载武器到发射平台类型
 将武器对象类作为组件添加到发射平台类型中：
-
-代码段
-
 ```afsim
 // 步骤 4：将武器加载到轰炸机平台类型
 platform_type BOMBER WSF_PLATFORM
@@ -146,6 +130,7 @@ end_platform_type
 ```
 
 ## 5. 平台航迹与执行指令
+
 ### 5.1 平台航迹 (track)
 track 块定义了平台对另一对象的初始感知信息（或称航迹）。
 
