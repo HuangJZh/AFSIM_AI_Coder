@@ -1,14 +1,13 @@
-# AFSIM 代码生成助手 (分步引导版)
-# 已修改为使用 OpenAI 兼容 API
 
 import os
 import sys
 import time
 import requests  
+from dotenv import load_dotenv
 
-API_BASE_URL = "https://api.deepseek.com"  
-API_KEY = "sk-bfc6ac650b1e431dbfec1e2ef49546ee"  
-MODEL_NAME = "deepseek-chat"  
+API_BASE_URL = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com")
+API_KEY = os.getenv("DEEPSEEK_API_KEY")
+MODEL_NAME = "deepseek-chat" 
 
 KNOWLEDGE_DIR = "./tutorials"  
 
