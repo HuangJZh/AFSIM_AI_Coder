@@ -7,6 +7,6 @@
 # 对于platform_type的错误列表
 **每一类platform_type定义只能出现一次**
 不能出现speed
-0.0 1700 kts是错误的，正确的语法是0.0 s 1700 kts，以此类推
-radius 500 m probability 0.8 是错误的，正确的语法是radius_and_pk 500 m 0.8，以此类推
-execute at time 600 sec absolute 是错误的，正确的语法是 execute at_time 600 s absolute，以此类推
+0.0 1700 kts是错误的，缺少单位s，正确的语法是0.0 s 1700 kts
+radius 500 m probability 0.8 是错误的，正确的语法是radius_and_pk 500 m 0.8
+execute at time 600 sec absolute 是错误的，正确的语法是 execute at_time 600 s absolute
