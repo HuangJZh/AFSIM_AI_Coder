@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 from pathlib import Path
 from typing import TypedDict, List, Optional, Dict, Any
 from dotenv import load_dotenv
@@ -17,7 +18,7 @@ os.environ["NO_PROXY"] = "localhost,127.0.0.1,::1"
 os.environ["no_proxy"] = "localhost,127.0.0.1,::1"
 
 deepseek_llm = ChatOpenAI(
-    model="deepseek-chat", 
+    model="deepseek-reasoner", 
     api_key=os.getenv("DEEPSEEK_API_KEY"), 
     base_url="https://api.deepseek.com/v1",
     max_tokens=8192,
@@ -57,6 +58,7 @@ class AgentState(TypedDict):
     project_files: List[dict]   # 最终整合的所有文件
     errors: List[str]
     revision_count: int
+    enable_validation: bool     # 新增：是否启用校验节点
 
 # ==========================================
 # 2. 工作流节点定义 (完全匹配四步走流程)
@@ -81,11 +83,16 @@ def build_platforms(state: AgentState):
     print("--- [构建阶段 - 步骤2] 生成平台定义 (platforms/ 文件夹) ---")
     parser = PydanticOutputParser(pydantic_object=AfsimProjectFiles)
     prompt = ChatPromptTemplate.from_messages([
-        ("system", """你是 AFSIM 平台构建专家。请根据提取的 JSON，创建 `platforms` 文件夹下的所有文件（如 air.txt, missile.txt, ship.txt 等）。
-        【规则】：
-        1. 使用 platform_type 定义基础类型，包含 mover, weapon, execute 等。
-        2. 如果包含导弹等武器，一并定义 weapon_effects 和 weapon。
-        3. 如果平台需要武器，确保 include 对应的武器文件。
+        ("system", """你是 AFSIM 平台构建专家。请根据提取的 JSON，创建 `platforms` 文件夹下的所有平台类型文件（如 air.txt, missile.txt, ship.txt 等）。
+        
+        【🚨 绝对红线约束 - 违反任何一条将导致编译失败】：
+        1. 严格区分类型与实例：`platform_type` 是抽象模板！**绝对禁止**在 `platform_type` 或其内部的 `mover` 中出现 `side`, `position`, `altitude`, `speed`, `heading` 等具体状态参数。这些只能在场景实例化时使用。
+        2. 特征块必须外部定义：`radar_signature`、`infrared_signature` 等完整的定义块（包含 constant 或 inline_table）**必须写在 `platform_type` 外部**。在 `platform_type` 内部仅用名称引用（如直接写 `radar_signature MY_SIG_NAME`）。
+        3. 武器杀伤语法：定义 `WSF_GRADUATED_LETHALITY` 武器效果时，绝对禁止编造 `range` 或 `kill_probability` 块！必须严格使用单行语法：`radius_and_pk <距离> <概率>`（例如：`radius_and_pk 500 m 0.8`）。
+        4. 时间单位：所有的秒数单位必须严格使用 `s`，绝对禁止使用 `sec`。
+        5. 限制输出目录：你**只能**生成 `platforms/` 目录下的文件。
+        6. 保持简洁：如果没有明确要求，不要随意为非智能平台（如 tank, ship, satellite）添加 `WSF_SCRIPT_PROCESSOR` 处理器。
+        
         【教程参考】:\n{knowledge}\n
         {format_instructions}"""),
         ("user", "任务数据:\n{json_data}")
@@ -105,12 +112,22 @@ def build_platforms(state: AgentState):
 def build_scenarios(state: AgentState):
     """第三步：编写阵营实例与航线 (生成 scenarios/blue.txt, red.txt)"""
     print("--- [构建阶段 - 步骤3] 生成阵营想定 (scenarios/ 文件夹) ---")
+    
+    # 提取已生成的平台文件路径，传递给大模型，作为强制约束的上下文
+    generated_platform_paths = [f["filepath"] for f in state.get("platform_files", [])]
+    paths_context = "\n".join(generated_platform_paths)
+    
     parser = PydanticOutputParser(pydantic_object=AfsimProjectFiles)
     prompt = ChatPromptTemplate.from_messages([
         ("system", """你是 AFSIM 想定部署专家。请根据提取的 JSON，创建 `scenarios` 文件夹下的阵营文件（如 blue.txt, red.txt）。
-        【规则】：
-        1. 使用 include_once 引入 `platforms/` 中对应类型的平台文件。
-        2. 使用 platform 命令实例化实体，配置 side, icon, track, position, route 等。
+        【强制约束规则】：
+        1. 使用 `include_once` 引入平台文件。
+        2. 你**只能**引用以下确实存在的已生成平台文件列表，绝对禁止臆造不存在的文件（如 ground.txt, surface.txt 等）：
+        <已生成的平台文件>
+        {paths_context}
+        </已生成的平台文件>
+        3. 使用 platform 命令实例化实体，配置 side, icon, track, position, route 等。
+        
         【教程参考】:\n{knowledge}\n
         {format_instructions}"""),
         ("user", "任务数据:\n{json_data}")
@@ -120,6 +137,7 @@ def build_scenarios(state: AgentState):
         project_obj = chain.invoke({
             "knowledge": KNOWLEDGE_PLATFORMS,
             "json_data": state["scenario_json"],
+            "paths_context": paths_context,  # 注入防幻觉上下文
             "format_instructions": parser.get_format_instructions()
         })
         return {"scenario_files": [f.model_dump() for f in project_obj.files if f.filepath.startswith("scenarios/")]}
@@ -135,7 +153,7 @@ def build_main_assembler(state: AgentState):
     scenario_paths = [f["filepath"] for f in state.get("scenario_files", [])]
     include_str = "\n".join([f"include {path}" for path in scenario_paths])
     
-    # 按照你的标准流程，自动生成标准 weapon.txt
+    # 按照标准流程，自动生成标准 weapon.txt
     weapon_txt_content = f"""# AFSIM Main Execution Script
 define_path_variable NAME weapon
 log_file output/$(NAME).log
@@ -160,6 +178,13 @@ end_time 30 m
     all_project_files = [main_file] + state.get("platform_files", []) + state.get("scenario_files", [])
     
     return {"project_files": all_project_files}
+
+def should_run_validation(state: AgentState):
+    """条件边：判断是否需要执行语法校验"""
+    if state.get("enable_validation", False):
+        return "validate"
+    print("--- [系统提示] 已跳过大模型语法校验阶段 ---")
+    return "finish"
 
 def syntax_validator(state: AgentState):
     """节点D：跨文件全局校验"""
@@ -232,8 +257,10 @@ workflow.add_edge("parser", "build_platforms")
 workflow.add_edge("build_platforms", "build_scenarios")
 workflow.add_edge("build_scenarios", "assemble_main")
 
-# 校验循环
-workflow.add_edge("assemble_main", "validator")
+# 根据用户选择，决定是否进入校验循环
+workflow.add_conditional_edges("assemble_main", should_run_validation, {"validate": "validator", "finish": END})
+
+# 校验循环内部路线
 workflow.add_conditional_edges("validator", should_rebuild_with_human, {"fix": "corrector", "finish": END})
 workflow.add_edge("corrector", "validator")
 
@@ -245,7 +272,7 @@ app = workflow.compile()
 # ==========================================
 if __name__ == "__main__":
     print("======================================================")
-    print("  AFSIM 脚本生成系统 ")
+    print("  AFSIM 脚本生成系统 (完全映射你的四步走架构) ")
     print("======================================================")
     print("请输入军事对抗场景描述 (输入 //end 结束)：\n")
     
@@ -262,6 +289,10 @@ if __name__ == "__main__":
     task_description = "\n".join(input_lines).strip()
     
     if task_description:
+        # 新增选项：是否启用校验
+        val_choice = input("\n👉 是否启用大模型跨文件语法校验（耗费较多Token，调试中）？(y/n，默认 n): ").strip().lower()
+        enable_val = (val_choice == 'y')
+
         print("\n 启动 AFSIM 工作流...\n")
         initial_state = {
             "original_prompt": task_description, 
@@ -269,13 +300,18 @@ if __name__ == "__main__":
             "errors": [],
             "platform_files": [],
             "scenario_files": [],
-            "project_files": []
+            "project_files": [],
+            "enable_validation": enable_val  # 将选项注入状态
         }
         
         final_state = app.invoke(initial_state)
         
-        # 确保基础文件夹结构存在
+        # 核心修改：在写入新文件前，彻底清空输出文件夹
         output_dir = Path("afsim_output_project")
+        if output_dir.exists():
+            shutil.rmtree(output_dir) # 递归删除整个目录及内容
+            
+        # 重新创建基础文件夹结构
         (output_dir / "platforms").mkdir(parents=True, exist_ok=True)
         (output_dir / "scenarios").mkdir(parents=True, exist_ok=True)
         (output_dir / "output").mkdir(parents=True, exist_ok=True) # 输出用的空文件夹
