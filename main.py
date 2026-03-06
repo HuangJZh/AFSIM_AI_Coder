@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from typing import TypedDict, List, Optional, Dict, Any
 from dotenv import load_dotenv
@@ -7,40 +8,23 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langgraph.graph import StateGraph, END
-import json
-
 
 # ==========================================
-# 0. 环境准备与双模型初始化 
+# 0. 环境准备 (DeepSeek 驱动)
 # ==========================================
 load_dotenv()
-
-# 【关键新增】强制绕过系统代理，防止请求被 Clash/VPN 拦截导致 502
 os.environ["NO_PROXY"] = "localhost,127.0.0.1,::1"
 os.environ["no_proxy"] = "localhost,127.0.0.1,::1"
 
-# 1. 智慧中枢：DeepSeek 模型 (用于解析、架构规划、校验、修复)
 deepseek_llm = ChatOpenAI(
     model="deepseek-chat", 
     api_key=os.getenv("DEEPSEEK_API_KEY"), 
     base_url="https://api.deepseek.com/v1",
-    max_tokens=1024,
+    max_tokens=8192,
     temperature=0.1
 )
 
-# 2. 基础干活节点：本地微调小模型
-local_llm = ChatOpenAI(
-    model="Qwen2.5-AFSIM-Base-SFT", 
-    api_key="LOCAL_DUMMY_KEY",     
-    # 【关键修改】将 localhost 换成 127.0.0.1
-    base_url="http://127.0.0.1:8000/v1", 
-    max_tokens=1024,
-    temperature=0.1
-)
-
-# ==========================================
-# 1. 本地知识库加载 (仅保留给高级节点使用)
-# ==========================================
+# 加载知识库 (假设 tutorials 文件夹下有对应的 md 文件)
 TUTORIALS_DIR = Path("tutorials")
 def load_tutorial(filename: str) -> str:
     filepath = TUTORIALS_DIR / filename
@@ -49,184 +33,142 @@ def load_tutorial(filename: str) -> str:
             return f.read()
     return ""
 
-# 小模型由于注意力机制限制，不再加载 RAG 教程。
-# 仅为 DeepSeek 保留错误排查知识库
-KNOWLEDGE_ERRORS = load_tutorial("afsim_error_collection.md")
+KNOWLEDGE_PLATFORMS = load_tutorial("afsim_platforms.md") + "\n" + load_tutorial("afsim_mover_types_routes.md")
+KNOWLEDGE_WEAPONS = load_tutorial("afsim_weapons_and_commands.md") + "\n" + load_tutorial("afsim_signatures_and_parts.md")
+KNOWLEDGE_EVENTS = load_tutorial("afsim_command_and_reports.md")
+KNOWLEDGE_ERRORS = load_tutorial("task_correction.md")
 
 # ==========================================
-# 2. 动态数据结构定义 (Pydantic Schema)
+# 1. 数据结构定义
 # ==========================================
-class RoutePoint(BaseModel):
-    latitude: str = Field(description="纬度，例如：24:26:35.300n")
-    longitude: str = Field(description="经度，例如：120:09:56.232e")
-    altitude: Optional[str] = Field(None, description="高度")
-
-class Platform(BaseModel):
-    name: str = Field(description="平台标识")
-    platform_type: str = Field(description="平台类型")
-    initial_location: str = Field(description="初始位置描述")
-    speed: Optional[str] = Field(None, description="速度描述")
-    route: Optional[List[RoutePoint]] = Field(None, description="航行路线")
-    other_attributes: Optional[Dict[str, Any]] = Field(None, description="其他属性")
-
-class Faction(BaseModel):
-    faction_name: str = Field(description="阵营名称的英文缩写")
-    platforms: List[Platform] = Field(description="该阵营平台实体")
-
-class ScenarioStructure(BaseModel):
-    factions: List[Faction] = Field(description="场景阵营列表")
-    weapons: List[Dict[str, Any]] = Field(description="武器及效能参数")
-    simulation_events: List[Dict[str, Any]] = Field(description="交战事件")
-
 class AfsimProjectFile(BaseModel):
-    filepath: str = Field(description="相对路径，如 'setup.txt', 'platforms/x.txt', 'main.txt'")
-    content: str = Field(description="AFSIM 脚本内容")
+    filepath: str = Field(description="文件路径，例如 'weapon.txt', 'platforms/air.txt', 'scenarios/blue.txt'")
+    content: str = Field(description="AFSIM 脚本代码")
 
 class AfsimProjectFiles(BaseModel):
-    files: List[AfsimProjectFile] = Field(description="项目文件列表")
+    files: List[AfsimProjectFile] = Field(description="生成的文件列表")
 
-# ==========================================
-# 3. 定义全局状态 (State)
-# ==========================================
+# 全局状态
 class AgentState(TypedDict):
     original_prompt: str
     scenario_json: str
-    platform_scripts: str
-    weapon_scripts: str
-    control_scripts: str
-    project_files: List[dict]
+    platform_files: List[dict]  # 存放第二步生成的平台定义
+    scenario_files: List[dict]  # 存放第三步生成的阵营想定
+    project_files: List[dict]   # 最终整合的所有文件
     errors: List[str]
     revision_count: int
 
 # ==========================================
-# 4. 工作流节点定义 (模型路由与分发)
+# 2. 工作流节点定义 (完全匹配四步走流程)
 # ==========================================
 
 def scenario_parser(state: AgentState):
-    """节点A：需求解析 (使用 DeepSeek)"""
-    print("--- [DeepSeek] 提取场景结构 ---")
-    parser = PydanticOutputParser(pydantic_object=ScenarioStructure)
+    """前置节点：提取任务中的核心要素 (兵力、航线、事件)"""
+    print("--- [解析阶段] 提取任务核心要素 ---")
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是一个 AFSIM 数据提取专家。提取阵营、平台航线等。\n{format_instructions}"),
+        ("system", "你是 AFSIM 数据提取专家。请将用户的任务描述提取为结构化的 JSON 格式。\n包含: factions(阵营及实体)、routes(航线)、events(交战事件)等。只需输出纯 JSON，不要包含 Markdown 符号。"),
         ("user", "{prompt}")
     ])
-    chain = prompt | deepseek_llm | parser
-    try:
-        parsed_scenario = chain.invoke({
-            "prompt": state["original_prompt"],
-            "format_instructions": parser.get_format_instructions()
-        })
-        return {"scenario_json": parsed_scenario.model_dump_json()}
-    except Exception as e:
-        state["errors"].append(f"解析失败: {str(e)}")
-        return {"scenario_json": "{}"}
+    chain = prompt | deepseek_llm
+    response = chain.invoke({"prompt": state["original_prompt"]})
+    json_str = response.content.strip()
+    if json_str.startswith("```json"):
+        json_str = json_str[7:-3].strip()
+    return {"scenario_json": json_str}
 
-def weapon_builder(state: AgentState):
-    """节点B1：武器生成 (任务拆解版)"""
-    print(f"--- [本地模型] 开始逐条生成武器代码 ---")
-    
-    # 1. 将大 JSON 解析回 Python 字典
-    try:
-        scenario_dict = json.loads(state["scenario_json"])
-    except json.JSONDecodeError:
-        return {"weapon_scripts": "// 武器 JSON 解析失败"}
-        
-    weapons_code = []
-    
-    # 2. 定义专门针对“单条任务”的极简提示词
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是一个 AFSIM 脚本助手。请根据下方提供的单一武器参数，生成该武器的 AFSIM 定义代码。\n【严格要求】只输出纯代码，绝对不要任何解释，不要使用 ``` 这种 markdown 代码块符号。"),
-        ("user", "武器参数：\n{single_item}")
-    ])
-    chain = prompt | local_llm
-    
-    # 3. 循环遍历，每次只让小模型写一个武器
-    weapons = scenario_dict.get("weapons", [])
-    if not weapons:
-        print("  -> 未检测到武器需求。")
-        return {"weapon_scripts": ""}
-        
-    for i, weapon in enumerate(weapons):
-        print(f"  -> 正在生成第 {i+1}/{len(weapons)} 个武器...")
-        item_str = json.dumps(weapon, ensure_ascii=False)
-        response = chain.invoke({"single_item": item_str})
-        weapons_code.append(response.content.strip())
-        
-    return {"weapon_scripts": "\n\n".join(weapons_code)}
-
-def platform_builder(state: AgentState):
-    """节点B2：平台生成 (任务拆解版)"""
-    print("--- [本地模型] 开始逐条生成平台与航线代码 ---")
-    try:
-        scenario_dict = json.loads(state["scenario_json"])
-    except json.JSONDecodeError:
-        return {"platform_scripts": "// 平台 JSON 解析失败"}
-        
-    platforms_code = []
-    
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是一个 AFSIM 脚本助手。请根据下方提供的单一平台及航线参数，生成对应的 AFSIM 实体和路线定义代码。\n【严格要求】只输出纯代码，绝对不要任何解释，不要使用 ``` 这种 markdown 代码块符号。"),
-        ("user", "所属阵营：{faction_name}\n平台参数：\n{single_item}")
-    ])
-    chain = prompt | local_llm
-    
-    # 嵌套循环：遍历阵营 -> 遍历该阵营的平台
-    for faction in scenario_dict.get("factions", []):
-        faction_name = faction.get("faction_name", "Unknown")
-        platforms = faction.get("platforms", [])
-        
-        for i, platform in enumerate(platforms):
-            print(f"  -> 正在生成 [{faction_name}] 阵营的第 {i+1}/{len(platforms)} 个平台...")
-            item_str = json.dumps(platform, ensure_ascii=False)
-            response = chain.invoke({
-                "faction_name": faction_name, 
-                "single_item": item_str
-            })
-            platforms_code.append(response.content.strip())
-            
-    return {"platform_scripts": "\n\n".join(platforms_code)}
-
-def event_builder(state: AgentState):
-    """节点B3：事件生成 (使用 本地小模型, 移除 RAG)"""
-    print("--- [本地模型] 生成控制事件代码 ---")
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是一个 AFSIM 脚本助手。根据 JSON 生成 execute 块和时间控制。只需输出代码。"),
-        ("user", "{json_data}")
-    ])
-    chain = prompt | local_llm
-    response = chain.invoke({"json_data": state["scenario_json"]})
-    return {"control_scripts": response.content}
-
-def project_architect(state: AgentState):
-    """节点C：项目多文件汇编 (使用 DeepSeek)"""
-    print("--- [DeepSeek] 统筹项目文件架构 ---")
+def build_platforms(state: AgentState):
+    """第二步：编写平台底层类型定义 (生成 platforms/*.txt)"""
+    print("--- [构建阶段 - 步骤2] 生成平台定义 (platforms/ 文件夹) ---")
     parser = PydanticOutputParser(pydantic_object=AfsimProjectFiles)
     prompt = ChatPromptTemplate.from_messages([
-        ("system", """你是 AFSIM 架构师。重组代码片段为多文件项目(setup.txt, scenarios/laydown.txt, main.txt)。
-        要求主文件按顺序 include_once 子文件。
+        ("system", """你是 AFSIM 平台构建专家。请根据提取的 JSON，创建 `platforms` 文件夹下的所有文件（如 air.txt, missile.txt, ship.txt 等）。
+        【规则】：
+        1. 使用 platform_type 定义基础类型，包含 mover, weapon, execute 等。
+        2. 如果包含导弹等武器，一并定义 weapon_effects 和 weapon。
+        3. 如果平台需要武器，确保 include 对应的武器文件。
+        【教程参考】:\n{knowledge}\n
         {format_instructions}"""),
-        ("user", "武器:\n{weapons}\n\n平台:\n{platforms}\n\n控制:\n{controls}")
+        ("user", "任务数据:\n{json_data}")
     ])
     chain = prompt | deepseek_llm | parser
     try:
         project_obj = chain.invoke({
-            "weapons": state.get('weapon_scripts', ''),
-            "platforms": state.get('platform_scripts', ''),
-            "controls": state.get('control_scripts', ''),
+            "knowledge": KNOWLEDGE_PLATFORMS + "\n" + KNOWLEDGE_WEAPONS,
+            "json_data": state["scenario_json"],
             "format_instructions": parser.get_format_instructions()
         })
-        return {"project_files": [f.model_dump() for f in project_obj.files]}
+        return {"platform_files": [f.model_dump() for f in project_obj.files if f.filepath.startswith("platforms/")]}
     except Exception as e:
-        return {"project_files": []}
+        print(f"  -> 构建平台出错: {e}")
+        return {"platform_files": []}
+
+def build_scenarios(state: AgentState):
+    """第三步：编写阵营实例与航线 (生成 scenarios/blue.txt, red.txt)"""
+    print("--- [构建阶段 - 步骤3] 生成阵营想定 (scenarios/ 文件夹) ---")
+    parser = PydanticOutputParser(pydantic_object=AfsimProjectFiles)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", """你是 AFSIM 想定部署专家。请根据提取的 JSON，创建 `scenarios` 文件夹下的阵营文件（如 blue.txt, red.txt）。
+        【规则】：
+        1. 使用 include_once 引入 `platforms/` 中对应类型的平台文件。
+        2. 使用 platform 命令实例化实体，配置 side, icon, track, position, route 等。
+        【教程参考】:\n{knowledge}\n
+        {format_instructions}"""),
+        ("user", "任务数据:\n{json_data}")
+    ])
+    chain = prompt | deepseek_llm | parser
+    try:
+        project_obj = chain.invoke({
+            "knowledge": KNOWLEDGE_PLATFORMS,
+            "json_data": state["scenario_json"],
+            "format_instructions": parser.get_format_instructions()
+        })
+        return {"scenario_files": [f.model_dump() for f in project_obj.files if f.filepath.startswith("scenarios/")]}
+    except Exception as e:
+        print(f"  -> 构建想定出错: {e}")
+        return {"scenario_files": []}
+
+def build_main_assembler(state: AgentState):
+    """第一步 & 第四步：编写核心启动文件并汇编全局文件"""
+    print("--- [汇编阶段 - 步骤1&4] 生成 weapon.txt 并打包项目 ---")
+    
+    # 获取前面生成的场景文件列表，准备动态 include
+    scenario_paths = [f["filepath"] for f in state.get("scenario_files", [])]
+    include_str = "\n".join([f"include {path}" for path in scenario_paths])
+    
+    # 按照你的标准流程，自动生成标准 weapon.txt
+    weapon_txt_content = f"""# AFSIM Main Execution Script
+define_path_variable NAME weapon
+log_file output/$(NAME).log
+
+# 引入各个阵营文件
+{include_str}
+
+event_output
+   file output/$(NAME).evt
+end_event_output
+
+event_pipe  
+   file output/$(NAME).aer
+end_event_pipe
+
+end_time 30 m
+"""
+    
+    main_file = {"filepath": "weapon.txt", "content": weapon_txt_content}
+    
+    # 汇总所有文件
+    all_project_files = [main_file] + state.get("platform_files", []) + state.get("scenario_files", [])
+    
+    return {"project_files": all_project_files}
 
 def syntax_validator(state: AgentState):
-    """节点D：跨文件校验 (使用 DeepSeek + RAG)"""
-    print("--- [DeepSeek] 执行多文件语法校验 ---")
+    """节点D：跨文件全局校验"""
+    print("--- [审计阶段] 跨文件语法与逻辑校验 ---")
     project_text = "\n".join([f"==== {f['filepath']} ====\n{f['content']}\n" for f in state.get("project_files", [])])
     
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是 AFSIM 语法审计员。检查以下代码。\n【常见错误】\n{knowledge}\n完全无误回复 PASS，有错指出错误。"),
-        ("user", "{code}")
+        ("system", "你是 AFSIM 语法审计专家。请检查以下项目代码，检查 include 路径是否正确，逻辑是否闭环。\n【排错指南】\n{knowledge}\n\n如果完全无误，请仅回复 PASS；如果有错误，请逐条指出。"),
+        ("user", "【项目代码】\n{code}")
     ])
     response = deepseek_llm.invoke(prompt.format_messages(code=project_text, knowledge=KNOWLEDGE_ERRORS))
     feedback = response.content.strip()
@@ -235,14 +177,14 @@ def syntax_validator(state: AgentState):
     return {"errors": errors, "revision_count": state.get("revision_count", 0) + 1}
 
 def code_corrector(state: AgentState):
-    """节点E：代码自愈 (使用 DeepSeek)"""
-    print("--- [DeepSeek] 自动修复代码 ---")
+    """节点E：代码自愈"""
+    print("--- [修复阶段] 根据审计意见自动修复代码 ---")
     project_text = "\n".join([f"==== {f['filepath']} ====\n{f['content']}\n" for f in state.get("project_files", [])])
     parser = PydanticOutputParser(pydantic_object=AfsimProjectFiles)
     
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是高级修复专家。根据错误报告修复项目，重新输出。只修复报错处。\n{format_instructions}"),
-        ("user", "【项目】\n{code}\n\n【错误】\n{errors}")
+        ("system", "你是 AFSIM 修复专家。请根据错误报告修复项目代码，保持原有的多文件目录结构。\n{format_instructions}"),
+        ("user", "【原始项目】\n{code}\n\n【错误报告】\n{errors}")
     ])
     chain = prompt | deepseek_llm | parser
     try:
@@ -255,70 +197,43 @@ def code_corrector(state: AgentState):
     except Exception as e:
         return {"errors": [f"修正失败: {str(e)}"]}
 
-# ==========================================
-# 5. 人类在环 (Human-in-the-Loop) 拦截器
-# ==========================================
 def should_rebuild_with_human(state: AgentState):
-    """条件边：拦截校验错误，交由人工判断是否进行修复"""
-    
+    """条件边：拦截器"""
     if len(state["errors"]) > 0 and state["revision_count"] < 3:
         print("\n" + "!"*50)
-        print("🚨 [警告] 语法校验器发现潜在错误：")
+        print(" [警告] 发现潜在错误：")
         for err in state["errors"]:
             print(f"  - {err}")
         print("!"*50)
         
-        print("\n👇 【当前已生成的代码】 👇")
-        for file in state.get("project_files", []):
-            print(f"\n[{file['filepath']}]")
-            print(file['content'])
-            print("-" * 40)
-        
-        # 阻塞终端，等待人类输入
         while True:
-            choice = input("\n👉 是否调用 DeepSeek 启动自动修复？(y/Y: 继续修复, n/N: 忽略错误并输出代码): ").strip().lower()
+            choice = input("\n👉 是否调用 DeepSeek 修复？(y/Y: 修复, n/N: 忽略并输出): ").strip().lower()
             if choice == 'y':
-                print("\n--- 授权通过，交由 DeepSeek 修复 ---")
                 return "fix"
             elif choice == 'n':
-                print("\n--- 人工终止修复流程，直接输出当前结果 ---")
                 return "finish"
-            else:
-                print("无效输入，请输入 y 或 n。")
-                
     return "finish"
 
 # ==========================================
-# 6. 构建与编译 LangGraph 工作流
+# 3. 编排并编译 LangGraph 工作流
 # ==========================================
 workflow = StateGraph(AgentState)
 
+# 添加节点
 workflow.add_node("parser", scenario_parser)
-workflow.add_node("build_weapons", weapon_builder)
-workflow.add_node("build_platforms", platform_builder)
-workflow.add_node("build_events", event_builder)
-workflow.add_node("architect", project_architect)
+workflow.add_node("build_platforms", build_platforms)     # 第二步
+workflow.add_node("build_scenarios", build_scenarios)     # 第三步
+workflow.add_node("assemble_main", build_main_assembler)  # 第一步&第四步组合
 workflow.add_node("validator", syntax_validator)
 workflow.add_node("corrector", code_corrector)
 
-# # 并行执行小模型
-# workflow.add_edge("parser", "build_weapons")
-# workflow.add_edge("parser", "build_platforms")
-# workflow.add_edge("parser", "build_events")
+# 定义严格的串行执行流
+workflow.add_edge("parser", "build_platforms")
+workflow.add_edge("build_platforms", "build_scenarios")
+workflow.add_edge("build_scenarios", "assemble_main")
 
-# # 大模型重组
-# workflow.add_edge("build_weapons", "architect")
-# workflow.add_edge("build_platforms", "architect")
-# workflow.add_edge("build_events", "architect")
-
-# 将小模型任务改为串行，缓解本地显存压力
-workflow.add_edge("parser", "build_weapons")
-workflow.add_edge("build_weapons", "build_platforms")
-workflow.add_edge("build_platforms", "build_events")
-workflow.add_edge("build_events", "architect")
-
-# 校验与人机交互流
-workflow.add_edge("architect", "validator")
+# 校验循环
+workflow.add_edge("assemble_main", "validator")
 workflow.add_conditional_edges("validator", should_rebuild_with_human, {"fix": "corrector", "finish": END})
 workflow.add_edge("corrector", "validator")
 
@@ -326,11 +241,11 @@ workflow.set_entry_point("parser")
 app = workflow.compile()
 
 # ==========================================
-# 7. 终端交互主程序
+# 4. 主程序入口
 # ==========================================
 if __name__ == "__main__":
     print("======================================================")
-    print("  AFSIM 脚本智能生成系统 (本地小模型 + DeepSeek + 人工干预) ")
+    print("  AFSIM 脚本生成系统 ")
     print("======================================================")
     print("请输入军事对抗场景描述 (输入 //end 结束)：\n")
     
@@ -347,17 +262,26 @@ if __name__ == "__main__":
     task_description = "\n".join(input_lines).strip()
     
     if task_description:
-        print("\n启动 AFSIM 多智能体工作流...\n")
-        initial_state = {"original_prompt": task_description, "revision_count": 0, "errors": []}
+        print("\n 启动 AFSIM 工作流...\n")
+        initial_state = {
+            "original_prompt": task_description, 
+            "revision_count": 0, 
+            "errors": [],
+            "platform_files": [],
+            "scenario_files": [],
+            "project_files": []
+        }
         
-        # 运行流（遇到 should_rebuild_with_human 时会自动在终端等待您的输入）
         final_state = app.invoke(initial_state)
         
+        # 确保基础文件夹结构存在
         output_dir = Path("afsim_output_project")
-        output_dir.mkdir(exist_ok=True)
+        (output_dir / "platforms").mkdir(parents=True, exist_ok=True)
+        (output_dir / "scenarios").mkdir(parents=True, exist_ok=True)
+        (output_dir / "output").mkdir(parents=True, exist_ok=True) # 输出用的空文件夹
         
         print("\n" + "="*60)
-        print("任务结束！代码已落盘到本地目录：")
+        print(" 任务结束！代码已落盘到本地目录：")
         print("="*60)
         
         for file_dict in final_state.get("project_files", []):
@@ -365,4 +289,4 @@ if __name__ == "__main__":
             filepath.parent.mkdir(parents=True, exist_ok=True)
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(file_dict["content"])
-            print(f" 创建文件: {filepath}")
+            print(f"  创建文件: {filepath}")
