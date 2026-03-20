@@ -9,4 +9,6 @@ afsim_coder.log
 afsim_rag.log
 *.log
 .env
-project_analysis_report.json
+.env.local
+.env.*.local
+project_analysis_report.jso
