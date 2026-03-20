@@ -8,4 +8,5 @@ logs/
 afsim_coder.log
 afsim_rag.log
 *.log
+.env
 project_analysis_report.json
